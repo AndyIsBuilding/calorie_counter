@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 import pytz
 import csv
 import io
-
+import os
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key_here'  # Change this to a random secret key
-app.config['TIMEZONE'] = '' 
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
+app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -49,12 +49,12 @@ def init_db():
 
 
 def get_local_date():
-    tz = pytz.timezone(app.config['TIMEZONE'])
+    tz = pytz.timezone(os.environ.get('TIMEZONE', 'UTC'))
     return datetime.now(tz).date()
 
-@app.route('/')
+@app.route('/dashboard')
 @login_required
-def index():
+def dashboard():
     conn = sqlite3.connect('food_tracker.db')
     c = conn.cursor()
     c.execute("SELECT * FROM foods ORDER BY name")  # Order foods alphabetically
@@ -89,16 +89,16 @@ def index():
     weekly_summaries = c.fetchall()
     
     conn.close()
-    return render_template('index.html', foods=foods, daily_log=daily_log, 
+    return render_template('dashboard.html', foods=foods, daily_log=daily_log, 
                            total_calories=total_calories, total_protein=total_protein,
                            weekly_summaries=weekly_summaries)
 
 
-@app.route('/home')
-def home():
+@app.route('/')
+def index():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    return render_template('home.html')
+        return redirect(url_for('dashboard'))
+    return render_template('index.html')
 
 @app.route('/quick_add_food', methods=['POST'])
 @login_required
@@ -114,7 +114,7 @@ def quick_add_food():
     conn.close()
     
     flash('Food added successfully!', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/log_food', methods=['POST'])
@@ -168,7 +168,7 @@ def log_quick_food():
         flash('Food not found!', 'error')
     
     conn.close()
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 @app.route('/remove_food/<int:log_id>', methods=['POST'])
 @login_required
@@ -179,7 +179,7 @@ def remove_food(log_id):
     conn.commit()
     conn.close()
     
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 @app.route('/save_summary', methods=['POST'])
 @login_required
@@ -211,15 +211,15 @@ def save_summary():
     conn.close()
     
     flash('Daily summary saved successfully!', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 @app.route('/export_csv')
 @login_required
 def export_csv():
     conn = sqlite3.connect('food_tracker.db')
     c = conn.cursor()
-    c.execute("""SELECT date, food_name, calories, protein 
-                 FROM daily_log
+    c.execute("""SELECT date, summary, total_calories, total_protein 
+                 FROM daily_summary
                  WHERE user_id = ?
                  ORDER BY date""", (current_user.id,))
     data = c.fetchall()
@@ -227,14 +227,14 @@ def export_csv():
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date', 'Food', 'Calories', 'Protein'])
+    writer.writerow(['Date', 'Food Summary', 'Total Calories', 'Total Protein'])
     writer.writerows(data)
     
     return send_file(
         io.BytesIO(output.getvalue().encode()),
         mimetype='text/csv',
         as_attachment=True,
-        download_name='food_log.csv'  # Changed from attachment_filename
+        download_name='daily_summary.csv'
     )
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -251,7 +251,7 @@ def login():
         if user and check_password_hash(user[2], password):
             user_obj = User(user[0], user[1])
             login_user(user_obj)
-            return redirect(url_for('index'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password', 'error')
     
@@ -275,7 +275,7 @@ def register():
 
         if user_count > 0:
             flash('Only one user (the creator) is allowed in this application.', 'error')
-            return redirect(url_for('home'))
+            return redirect(url_for('index'))
         
         username = request.form['username']
         password = request.form['password']

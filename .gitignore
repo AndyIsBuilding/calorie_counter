@@ -2,3 +2,4 @@
 notes.md 
 *.db 
 __pycache__/
+.env
