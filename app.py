@@ -234,7 +234,7 @@ def export_csv():
         io.BytesIO(output.getvalue().encode()),
         mimetype='text/csv',
         as_attachment=True,
-        attachment_filename='food_log.csv'
+        download_name='food_log.csv'  # Changed from attachment_filename
     )
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -266,6 +266,17 @@ def logout():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
+        # Check if there's already a user in the database
+        conn = sqlite3.connect('food_tracker.db')
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM users")
+        user_count = c.fetchone()[0]
+        conn.close()
+
+        if user_count > 0:
+            flash('Only one user (the creator) is allowed in this application.', 'error')
+            return redirect(url_for('home'))
+        
         username = request.form['username']
         password = request.form['password']
         hashed_password = generate_password_hash(password)
