@@ -1,0 +1,8 @@
+{% extends "layout.html" %}
+
+{% block title %}Welcome to Calorie Tracker{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-4 text-center text-blue-600">Welcome to Calorie Tracker</h1>
+<p class="mb-4 text-center">Please <a href="{{ url_for('login') }}" class="text-blue-500 hover:underline">login</a> or <a href="{{ url_for('register') }}" class="text-blue-500 hover:underline">register</a> to continue.</p>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+
+{% block title %}Calorie Tracker{% endblock %}
+
+{% block extra_head %}
+<script>
+    function setFormAction(action) {
+        document.getElementById('addFoodForm').action = action;
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<nav class="bg-blue-600 p-4 text-white">
+    <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Calorie Tracker</h1>
+        <a href="{{ url_for('logout') }}" class="bg-blue-500 hover:bg-blue-700 py-2 px-4 rounded">Logout</a>
+    </div>
+</nav>
+
+<div class="container mx-auto mt-8 p-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Add Food</h2>
+            <form id="addFoodForm" action="" method="post" class="space-y-4">
+                <input type="text" name="name" placeholder="Food Name" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="calories" placeholder="Calories" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="protein" placeholder="Protein (g)" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="servings" placeholder="Servings" value="1" min="0.1" step="0.1" required class="w-full px-4 py-2 border rounded-md">
+                <div class="flex space-x-2">
+                    <button type="submit" onclick="setFormAction('{{ url_for('quick_add_food') }}')" class="flex-1 bg-green-500 text-white py-2 rounded-md hover:bg-green-600">Add to Quick Add</button>
+                    <button type="submit" onclick="setFormAction('{{ url_for('log_food') }}')" class="flex-1 bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">Log Food</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Quick Add</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {% for food in foods %}
+                <form action="{{ url_for('log_quick_food') }}" method="post">
+                    <input type="hidden" name="food_id" value="{{ food[0] }}">
+                    <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 text-sm">
+                        {{ food[1] }}
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Today's Log</h2>
+        <table class="w-full">
+            <thead>
+                <tr class="bg-gray-200">
+                    <th class="p-2 text-left">Food</th>
+                    <th class="p-2 text-left">Calories</th>
+                    <th class="p-2 text-left">Protein</th>
+                    <th class="p-2 text-left">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in daily_log %}
+                <tr>
+                    <td class="p-2">{{ log[1] }}</td>
+                    <td class="p-2">{{ log[2] }}</td>
+                    <td class="p-2">{{ log[3] }}g</td>
+                    <td class="p-2">
+                        <form action="{{ url_for('remove_food', log_id=log[0]) }}" method="post">
+                            <button type="submit" class="bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="mt-4">
+            <p class="font-bold">Total Calories: {{ total_calories }}</p>
+            <p class="font-bold">Total Protein: {{ total_protein }}g</p>
+        </div>
+        <form action="{{ url_for('save_summary') }}" method="post" class="mt-4">
+            <button type="submit" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
+        </form>
+
+        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Historical Daily Summaries</h2>
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">Date</th>
+                        <th class="p-2 text-left">Total Calories</th>
+                        <th class="p-2 text-left">Total Protein</th>
+                        <th class="p-2 text-left">Summary</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for summary in weekly_summaries %}
+                    <tr>
+                        <td class="p-2">{{ summary[0] }}</td>
+                        <td class="p-2">{{ summary[1] }}</td>
+                        <td class="p-2">{{ summary[2] }}g</td>
+                        <td class="p-2">{{ summary[3] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <a href="{{ url_for('export_csv') }}" class="bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600">Export to CSV</a>
+    </div>
+</div>
+{% endblock %}
