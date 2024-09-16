@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
@@ -7,9 +7,25 @@ import pytz
 import csv
 import io
 import os
+
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
+
+
+# Set the database path based on the environment
+if 'PYTHONANYWHERE_SITE' in os.environ:
+    # We're on PythonAnywhere (production)
+    DB_PATH = os.getenv('DB_PATH')
+else:
+    # We're in local development
+    DB_PATH = 'food_tracker.db'
+
+# Update app configuration
+app.config['DB_PATH'] = DB_PATH
+
+
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -22,7 +38,7 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
@@ -32,7 +48,7 @@ def load_user(user_id):
     return None
 
 def init_db():
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
@@ -55,7 +71,7 @@ def get_local_date():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute("SELECT * FROM foods ORDER BY name")  # Order foods alphabetically
     foods = c.fetchall()
@@ -104,17 +120,25 @@ def index():
 @login_required
 def quick_add_food():
     name = request.form['name']
-    calories = request.form['calories']
-    protein = request.form['protein']
+    calories = int(request.form['calories'])
+    protein = int(request.form['protein'])
     
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute("INSERT INTO foods (name, calories, protein) VALUES (?, ?, ?)", (name, calories, protein))
+    food_id = c.lastrowid
     conn.commit()
     conn.close()
     
-    flash('Food added successfully!', 'success')
-    return redirect(url_for('dashboard'))
+    return jsonify({
+        'success': True,
+        'food': {
+            'id': food_id,
+            'name': name,
+            'calories': calories,
+            'protein': protein
+        }
+    })
 
 
 @app.route('/log_food', methods=['POST'])
@@ -125,7 +149,7 @@ def log_food():
     calories = int(request.form['calories'])
     protein = int(request.form['protein'])
     
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
 
     total_calories = int(calories * servings)
@@ -149,31 +173,47 @@ def log_quick_food():
     food_id = request.form['food_id']
     today = get_local_date().isoformat()
     
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     
-    # Fetch food details from the foods table
     c.execute("SELECT name, calories, protein FROM foods WHERE id = ?", (food_id,))
     food = c.fetchone()
     
     if food:
         food_name, calories, protein = food
-
-        # Insert into daily_log using the calculated values
         c.execute("INSERT INTO daily_log (date, food_name, calories, protein, user_id) VALUES (?, ?, ?, ?, ?)", 
                   (today, food_name, calories, protein, current_user.id))
+        log_id = c.lastrowid
         conn.commit()
-        flash('Food logged successfully!', 'success')
+        
+        # Calculate new totals
+        c.execute("SELECT SUM(calories), SUM(protein) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
+        total_calories, total_protein = c.fetchone()
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'log_entry': {
+                'id': log_id,
+                'food_name': food_name,
+                'calories': calories,
+                'protein': protein
+            },
+            'totals': {
+                'calories': total_calories,
+                'protein': total_protein
+            }
+        })
     else:
-        flash('Food not found!', 'error')
-    
-    conn.close()
-    return redirect(url_for('dashboard'))
-
+        conn.close()
+        return jsonify({
+            'success': False,
+            'message': 'Food not found!'
+        }), 404
 @app.route('/remove_food/<int:log_id>', methods=['POST'])
 @login_required
 def remove_food(log_id):
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute("DELETE FROM daily_log WHERE id = ? AND user_id = ?", (log_id, current_user.id))
     conn.commit()
@@ -186,7 +226,7 @@ def remove_food(log_id):
 def save_summary():
     today = get_local_date().isoformat()
     
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     
     # Fetch all foods logged for today
@@ -216,7 +256,7 @@ def save_summary():
 @app.route('/export_csv')
 @login_required
 def export_csv():
-    conn = sqlite3.connect('food_tracker.db')
+    conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
     c.execute("""SELECT date, summary, total_calories, total_protein 
                  FROM daily_summary
@@ -242,7 +282,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        conn = sqlite3.connect('food_tracker.db')
+        conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = c.fetchone()
@@ -267,7 +307,7 @@ def logout():
 def register():
     if request.method == 'POST':
         # Check if there's already a user in the database
-        conn = sqlite3.connect('food_tracker.db')
+        conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM users")
         user_count = c.fetchone()[0]
@@ -281,7 +321,7 @@ def register():
         password = request.form['password']
         hashed_password = generate_password_hash(password)
         
-        conn = sqlite3.connect('food_tracker.db')
+        conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         try:
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
