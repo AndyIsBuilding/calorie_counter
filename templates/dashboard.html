@@ -3,9 +3,103 @@
 {% block title %}Calorie Tracker{% endblock %}
 
 {% block extra_head %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     function setFormAction(action) {
         document.getElementById('addFoodForm').action = action;
+    }
+
+    $(document).ready(function() {
+        // Handle Quick Add button clicks
+        $(document).on('click', '.quick-add-btn', function(e) {
+            e.preventDefault();
+            var foodId = $(this).data('food-id');
+            $.ajax({
+                url: "{{ url_for('log_quick_food') }}",
+                type: 'POST',
+                data: { food_id: foodId },
+                success: function(response) {
+                    if (response.success) {
+                        updateTodaysLog(response.log_entry);
+                        updateTotals(response.totals);
+                    }
+                }
+            });
+        });
+
+        // Handle Add to Quick Add form submission
+        $('#addFoodForm').submit(function(e) {
+            if ($(this).attr('action') === "{{ url_for('quick_add_food') }}") {
+                e.preventDefault();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        if (response.success) {
+                            addQuickAddButton(response.food);
+                            $('#addFoodForm')[0].reset();
+                        }
+                    }
+                });
+            } else if ($(this).attr('action') === "{{ url_for('log_food') }}") {
+                e.preventDefault();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        if (response.success) {
+                            updateTodaysLog(response.log_entry);
+                            updateTotals(response.totals);
+                            $('#addFoodForm')[0].reset();
+                        }
+                    }
+                });
+            }
+        });
+
+        // Handle Remove Food button clicks
+        $(document).on('click', '.remove-food-btn', function(e) {
+            e.preventDefault();
+            var logId = $(this).data('log-id');
+            $.ajax({
+                url: "{{ url_for('remove_food', log_id=0) }}".replace('0', logId),
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        $('tr[data-log-id="' + logId + '"]').remove();
+                        updateTotals(response.totals);
+                    }
+                }
+            });
+        });
+    });
+
+    function updateTodaysLog(logEntry) {
+        $('#daily-log').append(
+            '<tr data-log-id="' + logEntry.id + '">' +
+                '<td class="p-2">' + logEntry.food_name + '</td>' +
+                '<td class="p-2">' + logEntry.calories + '</td>' +
+                '<td class="p-2">' + logEntry.protein + 'g</td>' +
+                '<td class="p-2">' +
+                    '<button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="' + logEntry.id + '">Remove</button>' +
+                '</td>' +
+            '</tr>'
+        );
+    }
+
+    function updateTotals(totals) {
+        $('#total-calories').text(totals.calories);
+        $('#total-protein').text(totals.protein + 'g');
+    }
+
+    function addQuickAddButton(food) {
+        $('.quick-add-grid').append(
+            '<button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="' + food.id + '">' +
+                food.name +
+            '</button>'
+        );
     }
 </script>
 {% endblock %}
@@ -36,14 +130,11 @@
 
         <div class="bg-white p-6 rounded-lg shadow-md">
             <h2 class="text-xl font-bold mb-4">Quick Add</h2>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div class="quick-add-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {% for food in foods %}
-                <form action="{{ url_for('log_quick_food') }}" method="post">
-                    <input type="hidden" name="food_id" value="{{ food[0] }}">
-                    <button type="submit" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white">
-                        {{ food[1] }}
-                    </button>
-                </form>
+                <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="{{ food[0] }}">
+                    {{ food[1] }}
+                </button>
                 {% endfor %}
             </div>
         </div>
@@ -60,24 +151,22 @@
                     <th class="p-2 text-left">Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="daily-log">
                 {% for log in daily_log %}
-                <tr>
+                <tr data-log-id="{{ log[0] }}">
                     <td class="p-2">{{ log[1] }}</td>
                     <td class="p-2">{{ log[2] }}</td>
                     <td class="p-2">{{ log[3] }}g</td>
                     <td class="p-2">
-                        <form action="{{ url_for('remove_food', log_id=log[0]) }}" method="post">
-                            <button type="submit" class="bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600">Remove</button>
-                        </form>
+                        <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}">Remove</button>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         <div class="mt-4">
-            <p class="font-bold">Total Calories: {{ total_calories }}</p>
-            <p class="font-bold">Total Protein: {{ total_protein }}g</p>
+            <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
+            <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
         </div>
         <form action="{{ url_for('save_summary') }}" method="post" class="mt-4">
             <button type="submit" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
@@ -112,4 +201,5 @@
         <a href="{{ url_for('export_csv') }}" class="bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600">Export to CSV</a>
     </div>
 </div>
+
 {% endblock %}

@@ -144,27 +144,42 @@ def quick_add_food():
 @app.route('/log_food', methods=['POST'])
 @login_required
 def log_food():
-    servings = float(request.form.get('servings', 1))
     name = request.form['name']
     calories = int(request.form['calories'])
     protein = int(request.form['protein'])
+    servings = float(request.form['servings'])
     
-    conn = sqlite3.connect(app.config['DB_PATH'])
-    c = conn.cursor()
-
     total_calories = int(calories * servings)
     total_protein = int(protein * servings)
     
-    # Log the food for today directly in the daily_log table
+    conn = sqlite3.connect(app.config['DB_PATH'])
+    c = conn.cursor()
+    
     today = get_local_date().isoformat()
     c.execute("INSERT INTO daily_log (date, food_name, calories, protein, user_id) VALUES (?, ?, ?, ?, ?)", 
               (today, name, total_calories, total_protein, current_user.id))
+    log_id = c.lastrowid
+    
+    # Calculate new totals
+    c.execute("SELECT SUM(calories), SUM(protein) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
+    total_calories, total_protein = c.fetchone()
     
     conn.commit()
     conn.close()
     
-    flash('Food logged successfully!', 'success')
-    return redirect(url_for('index'))
+    return jsonify({
+        'success': True,
+        'log_entry': {
+            'id': log_id,
+            'food_name': name,
+            'calories': total_calories,
+            'protein': total_protein
+        },
+        'totals': {
+            'calories': total_calories,
+            'protein': total_protein
+        }
+    })
 
 
 @app.route('/log_quick_food', methods=['POST'])
@@ -210,16 +225,32 @@ def log_quick_food():
             'success': False,
             'message': 'Food not found!'
         }), 404
+    
+
 @app.route('/remove_food/<int:log_id>', methods=['POST'])
 @login_required
 def remove_food(log_id):
     conn = sqlite3.connect(app.config['DB_PATH'])
     c = conn.cursor()
+    
+    # Delete the log entry
     c.execute("DELETE FROM daily_log WHERE id = ? AND user_id = ?", (log_id, current_user.id))
+    
+    # Calculate new totals
+    today = get_local_date().isoformat()
+    c.execute("SELECT SUM(calories), SUM(protein) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
+    total_calories, total_protein = c.fetchone()
+    
     conn.commit()
     conn.close()
     
-    return redirect(url_for('dashboard'))
+    return jsonify({
+        'success': True,
+        'totals': {
+            'calories': total_calories or 0,
+            'protein': total_protein or 0
+        }
+    })
 
 @app.route('/save_summary', methods=['POST'])
 @login_required
@@ -334,6 +365,24 @@ def register():
             flash('Username already exists. Please choose a different one.', 'error')
     
     return render_template('register.html')
+
+@app.errorhandler(400)
+def bad_request_error(error):
+    return render_template('errors.html', error_code=400, error_message="Bad Request"), 400
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    return render_template('errors.html', error_code=403, error_message="Forbidden"), 403
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('errors.html', error_code=404, error_message="Page Not Found"), 404
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return render_template('errors.html', error_code=500, error_message="Internal Server Error"), 500
+
+
 
 if __name__ == '__main__':
     init_db()
