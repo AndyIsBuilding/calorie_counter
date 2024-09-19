@@ -162,7 +162,7 @@ def log_food():
     
     # Calculate new totals
     c.execute("SELECT SUM(calories), SUM(protein) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
-    total_calories, total_protein = c.fetchone()
+    total_calories_sum, total_protein_sum = c.fetchone()
     
     conn.commit()
     conn.close()
@@ -176,8 +176,8 @@ def log_food():
             'protein': total_protein
         },
         'totals': {
-            'calories': total_calories,
-            'protein': total_protein
+            'calories': total_calories_sum,
+            'protein': total_protein_sum
         }
     })
 

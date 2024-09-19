@@ -174,7 +174,8 @@
 
         <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
             <h2 class="text-xl font-bold mb-4">Historical Daily Summaries</h2>
-            <table class="w-full">
+            <div class="overflow-x-auto">
+            <table class="w-full table-auto">
                 <thead>
                     <tr class="bg-gray-200">
                         <th class="p-2 text-left">Date</th>
@@ -189,11 +190,12 @@
                         <td class="p-2">{{ summary[0] }}</td>
                         <td class="p-2">{{ summary[1] }}</td>
                         <td class="p-2">{{ summary[2] }}g</td>
-                        <td class="p-2">{{ summary[3] }}</td>
+                        <td class="p-2 whitespace-pre-wrap">{{ summary[3] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
         </div>
     </div>
 

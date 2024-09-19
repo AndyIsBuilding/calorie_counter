@@ -2,68 +2,111 @@
 
 {% block title %}Welcome to Calorie Tracker{% endblock %}
 
-{% block content %}
-<h1 class="text-3xl font-bold mb-4 text-center text-blue-600">Welcome to Calorie Tracker</h1>
-<p class="mb-4 text-center">Please <a href="{{ url_for('login') }}" class="text-blue-500 hover:underline">login</a> or <a href="{{ url_for('register') }}" class="text-blue-500 hover:underline">register</a> to continue.</p>
+{% block extra_head %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+{% endblock %}
 
-<div class="max-w-4xl mx-auto mt-8">
-    <h2 class="text-2xl font-semibold mb-4">Example Dashboard</h2>
-    
-    <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        <h3 class="text-xl font-semibold mb-2">Today's Log</h3>
-        <table class="w-full mb-4">
-            <thead>
-                <tr>
-                    <th class="text-left">Food</th>
-                    <th class="text-left">Calories</th>
-                    <th class="text-left">Protein</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Example Food 1</td>
-                    <td>300</td>
-                    <td>10g</td>
-                </tr>
-                <tr>
-                    <td>Example Food 2</td>
-                    <td>200</td>
-                    <td>5g</td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <div class="flex justify-between mb-4">
-            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" disabled>
-                Add Food
-            </button>
-            <div>
-                <span class="font-semibold">Total Calories:</span> 500
-                <span class="font-semibold ml-4">Total Protein:</span> 15g
+{% block content %}
+<div class="bg-yellow-300 text-center py-2">
+    <p class="text-sm font-semibold">Example dashboard for the Calorie Tracker app below.</p>
+</div>
+<nav class="bg-blue-600 p-4 text-white">
+    <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Calorie Tracker</h1>
+        <div>
+            <a href="{{ url_for('login') }}" class="bg-blue-500 hover:bg-blue-700 py-2 px-4 rounded">Login</a>
+            <a href="{{ url_for('register') }}" class="bg-blue-500 hover:bg-blue-700 py-2 px-4 rounded ml-2">Register</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mx-auto mt-8 p-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Add Food</h2>
+            <form id="addFoodForm" action="" method="post" class="space-y-4">
+                <input type="text" name="name" placeholder="Food Name" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="calories" placeholder="Calories" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="protein" placeholder="Protein (g)" required class="w-full px-4 py-2 border rounded-md">
+                <input type="number" name="servings" placeholder="Servings" value="1" min="0.1" step="0.1" required class="w-full px-4 py-2 border rounded-md">
+                <div class="flex space-x-2">
+                    <button type="button" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md border-2 border-green-500" disabled>Add to Quick Add</button>
+                    <button type="button" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md border-2 border-blue-500" disabled>Log Food</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Quick Add</h2>
+            <div class="quick-add-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md border-2 border-blue-500" disabled>Example Food 1</button>
+                <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md border-2 border-blue-500" disabled>Example Food 2</button>
             </div>
         </div>
     </div>
-    
-    <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        <h3 class="text-xl font-semibold mb-2">Food Database</h3>
+
+    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Today's Log</h2>
         <table class="w-full">
             <thead>
+                <tr class="bg-gray-200">
+                    <th class="p-2 text-left">Food</th>
+                    <th class="p-2 text-left">Calories</th>
+                    <th class="p-2 text-left">Protein</th>
+                    <th class="p-2 text-left">Action</th>
+                </tr>
+            </thead>
+            <tbody id="daily-log">
                 <tr>
-                    <th class="text-left">Name</th>
-                    <th class="text-left">Calories</th>
-                    <th class="text-left">Protein</th>
+                    <td class="p-2">Example Food 1</td>
+                    <td class="p-2">300</td>
+                    <td class="p-2">10g</td>
+                    <td class="p-2">
+                        <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md" disabled>Remove</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="p-2">Example Food 2</td>
+                    <td class="p-2">200</td>
+                    <td class="p-2">5g</td>
+                    <td class="p-2">
+                        <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md" disabled>Remove</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="mt-4">
+            <p class="font-bold">Total Calories: <span id="total-calories">500</span></p>
+            <p class="font-bold">Total Protein: <span id="total-protein">15g</span></p>
+        </div>
+        <form action="" method="post" class="mt-4">
+            <button type="button" class="bg-purple-500 text-white py-2 px-4 rounded-md" disabled>Save Daily Summary</button>
+        </form>
+    </div>
+
+    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Historical Daily Summaries</h2>
+        <table class="w-full">
+            <thead>
+                <tr class="bg-gray-200">
+                    <th class="p-2 text-left">Date</th>
+                    <th class="p-2 text-left">Total Calories</th>
+                    <th class="p-2 text-left">Total Protein</th>
+                    <th class="p-2 text-left">Summary</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>Example Food A</td>
-                    <td>150</td>
-                    <td>8g</td>
+                    <td class="p-2">2023-01-01</td>
+                    <td class="p-2">2000</td>
+                    <td class="p-2">100g</td>
+                    <td class="p-2">Example Summary</td>
                 </tr>
                 <tr>
-                    <td>Example Food B</td>
-                    <td>250</td>
-                    <td>12g</td>
+                    <td class="p-2">2023-01-02</td>
+                    <td class="p-2">1800</td>
+                    <td class="p-2">90g</td>
+                    <td class="p-2">Example Summary</td>
                 </tr>
             </tbody>
         </table>
