@@ -141,6 +141,59 @@
     </div>
 
     <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Food Recommendations</h2>
+        <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+            Show Recommendations
+        </button>
+        <div id="recommendationsContainer" class="mt-4 hidden">
+            <div class="mb-4">
+                <h3 class="font-bold">Protein-focused (minimize calories):</h3>
+                <p id="proteinFirst"></p>
+            </div>
+            <div class="mb-4">
+                <h3 class="font-bold">Calorie-focused (maximize protein):</h3>
+                <p id="calorieFirst"></p>
+            </div>
+            <div>
+                <h3 class="font-bold">Balanced (hit both goals):</h3>
+                <p id="balanced"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('showRecommendationsBtn').addEventListener('click', function() {
+            fetch('/get_recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    total_calories: parseInt(document.getElementById('total-calories').textContent),
+                    total_protein: parseInt(document.getElementById('total-protein').textContent)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const formatFoodList = (foods) => {
+                    if (!Array.isArray(foods) || foods.length === 0) {
+                        return 'No recommendations available';
+                    }
+                    return foods.map(food => `${food.name} (${food.calories} cal, ${food.protein}g protein)`).join(', ');
+                };
+                document.getElementById('proteinFirst').textContent = formatFoodList(data[0]);
+                document.getElementById('calorieFirst').textContent = formatFoodList(data[1]);
+                document.getElementById('balanced').textContent = formatFoodList(data[2]);
+                document.getElementById('recommendationsContainer').classList.remove('hidden');
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
+
+    
+    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-bold mb-4">Today's Log</h2>
         <table class="w-full">
             <thead>

@@ -7,11 +7,17 @@ import pytz
 import csv
 import io
 import os
-
+from typing import NamedTuple
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
+
+class Food(NamedTuple):
+    id: int
+    name: str
+    calories: int
+    protein: int
 
 
 # Set the database path based on the environment
@@ -310,6 +316,9 @@ def export_csv():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated: 
+        return redirect(url_for('dashboard')) 
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -336,6 +345,9 @@ def logout():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated: 
+        return redirect(url_for('dashboard')) 
+
     if request.method == 'POST':
         # Check if there's already a user in the database
         conn = sqlite3.connect(app.config['DB_PATH'])
@@ -382,7 +394,111 @@ def not_found_error(error):
 def internal_server_error(error):
     return render_template('errors.html', error_code=500, error_message="Internal Server Error"), 500
 
+@app.route('/get_recommendations', methods=['POST'])
+@login_required
+def get_recommendations():
+    data = request.json
+    total_calories = data['total_calories']
+    total_protein = data['total_protein']
+    recommendations = food_recommendation(total_calories, total_protein)
+    
+    # Format the recommendations for the frontend
+    formatted_recommendations = []
+    for recommendation_list in recommendations:
+        if recommendation_list:
+            formatted_foods = [{"name": food.name, "calories": food.calories, "protein": food.protein} for food in recommendation_list[0]]
+            formatted_recommendations.append(formatted_foods)
+        else:
+            formatted_recommendations.append([])
+    
+    return jsonify(formatted_recommendations)
 
+def food_recommendation(total_calories, total_protein): 
+    """    Compare to pre-set calorie/protein goals; determine remaining calories/protein for the day 
+    Recommend based on remaining calories/protein
+    Return a list of recommended foods"""
+    
+    calorie_goal = 2900 
+    protein_goal = 220 
+
+    conn = sqlite3.connect(app.config['DB_PATH'])
+    c = conn.cursor()
+    foods = c.execute("SELECT * FROM foods") 
+    foods = [Food(*row) for row in c.fetchall()]
+    n = len(foods)
+
+    # Calculate remaining calories/protein for the day 
+    remaining_calories = calorie_goal - total_calories
+    remaining_protein = protein_goal - total_protein
+
+    # Use the remaining calories/protein to recommend foods 
+    # 3 recommendations: 
+        # 1. hit protein no matter what minimize cals; (ranked by least to most cals)
+        # 2. hit cals no matter what, maximize protein (ranked by most to least protein)
+        # 3. hit both cals and protein (ranked by least to most cals)
+    # Rank top 3 options for each category
+    dp = [[[None for _ in range(remaining_protein + 1)] 
+           for _ in range(remaining_calories + 1)] 
+           for _ in range(n + 1)]
+    
+    # Fill the base case
+    for j in range(remaining_calories + 1):
+        for k in range(remaining_protein + 1):
+            dp[0][j][k] = 0
+
+    # Fill the DP table
+    for i in range(1, n + 1):
+        for j in range(remaining_calories + 1):
+            for k in range(remaining_protein + 1):
+                if foods[i-1].calories <= j and foods[i-1].protein <= k:
+                    dp[i][j][k] = max(dp[i-1][j][k], 
+                                      dp[i-1][j-foods[i-1].calories][k-foods[i-1].protein] + foods[i-1].protein)
+                else:
+                    dp[i][j][k] = dp[i-1][j][k]
+
+    def backtrack(i: int, j: int, k: int):
+        if i == 0:
+            return []
+        if dp[i][j][k] > dp[i-1][j][k]:
+            return backtrack(i-1, j-foods[i-1].calories, k-foods[i-1].protein) + [foods[i-1]]
+        return backtrack(i-1, j, k)
+
+    # Generate recommendations
+    protein_first = []
+    calorie_first = []
+    balanced = []
+
+    # 1. Hit protein, minimize calories
+    for k in range(remaining_protein, -1, -1):
+        for j in range(remaining_calories + 1):
+            if dp[n][j][k] is not None and dp[n][j][k] >= k:
+                protein_first.append(backtrack(n, j, k))
+                break
+        if protein_first:
+            break
+
+    # 2. Hit calories, maximize protein
+    for j in range(remaining_calories, -1, -1):
+        max_protein = max((dp[n][j][k] for k in range(remaining_protein + 1) if dp[n][j][k] is not None), default=None)
+        if max_protein is not None:
+            k = next(k for k in range(remaining_protein + 1) if dp[n][j][k] == max_protein)
+            calorie_first.append(backtrack(n, j, k))
+            break
+
+    # 3. Hit both calories and protein
+    if dp[n][remaining_calories][remaining_protein] is not None:
+        balanced.append(backtrack(n, remaining_calories, remaining_protein))
+
+    # Sort recommendations
+    protein_first.sort(key=lambda x: sum(food.calories for food in x))
+    calorie_first.sort(key=lambda x: sum(food.protein for food in x), reverse=True)
+    balanced.sort(key=lambda x: sum(food.calories for food in x))
+
+    # TODO: Handle when the food has already been eaten that day, handle max servings 
+    # of any food, add full totals to the recommendation 
+
+      
+    return protein_first, calorie_first, balanced
 
 if __name__ == '__main__':
     init_db()
