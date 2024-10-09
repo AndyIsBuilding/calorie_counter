@@ -140,50 +140,48 @@
         </div>
     </div>
 
+    <!-- Recommendations to hit your goals -->    
     <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-bold mb-4">Food Recommendations</h2>
+        <h2 class="text-xl font-bold mb-4">Food Recommendations -- What to eat to hit your goals</h2>
         <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
             Show Recommendations
         </button>
         <div id="recommendationsContainer" class="mt-4 hidden">
             <div class="mb-4">
-                <h3 class="font-bold">Protein-focused (minimize calories):</h3>
+                <h3 class="font-bold">Hit protein goal, minimize calories:</h3>
                 <p id="proteinFirst"></p>
             </div>
             <div class="mb-4">
-                <h3 class="font-bold">Calorie-focused (maximize protein):</h3>
+                <h3 class="font-bold">Hit calorie goal, maximize protein:</h3>
                 <p id="calorieFirst"></p>
-            </div>
-            <div>
-                <h3 class="font-bold">Balanced (hit both goals):</h3>
-                <p id="balanced"></p>
             </div>
         </div>
     </div>
 
+    <!-- Script to show recommendations -->
     <script>
         document.getElementById('showRecommendationsBtn').addEventListener('click', function() {
             fetch('/get_recommendations', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    total_calories: parseInt(document.getElementById('total-calories').textContent),
-                    total_protein: parseInt(document.getElementById('total-protein').textContent)
-                })
+                }
             })
             .then(response => response.json())
             .then(data => {
-                const formatFoodList = (foods) => {
-                    if (!Array.isArray(foods) || foods.length === 0) {
+                console.log('Received recommendations:', data);
+                const formatRecommendation = (recommendation) => {
+                    if (!recommendation.foods || recommendation.foods.length === 0) {
                         return 'No recommendations available';
                     }
-                    return foods.map(food => `${food.name} (${food.calories} cal, ${food.protein}g protein)`).join(', ');
+                    const foodList = recommendation.foods.map(food => 
+                        `${food.name} ${food.calories} (${food.protein})`
+                    ).join(', ');
+                    return `${foodList} -- Recommendation Total: ${recommendation.total_calories} (${recommendation.total_protein}) -- Day's Total: ${recommendation.day_total_calories} (${recommendation.day_total_protein})`;
                 };
-                document.getElementById('proteinFirst').textContent = formatFoodList(data[0]);
-                document.getElementById('calorieFirst').textContent = formatFoodList(data[1]);
-                document.getElementById('balanced').textContent = formatFoodList(data[2]);
+
+                document.getElementById('proteinFirst').textContent = formatRecommendation(data.protein_first);
+                document.getElementById('calorieFirst').textContent = formatRecommendation(data.calorie_first);
                 document.getElementById('recommendationsContainer').classList.remove('hidden');
             })
             .catch((error) => {
