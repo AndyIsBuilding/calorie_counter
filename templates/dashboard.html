@@ -148,12 +148,16 @@
         </button>
         <div id="recommendationsContainer" class="mt-4 hidden">
             <div class="mb-4">
-                <h3 class="font-bold">Hit protein goal, minimize calories:</h3>
-                <p id="proteinFirst"></p>
+                <h3 class="font-bold">Hit both calorie and protein goals:</h3>
+                <p id="hitBoth"></p>
             </div>
             <div class="mb-4">
-                <h3 class="font-bold">Hit calorie goal, maximize protein:</h3>
-                <p id="calorieFirst"></p>
+                <h3 class="font-bold">Prioritize protein goal:</h3>
+                <p id="prioritizeProtein"></p>
+            </div>
+            <div class="mb-4">
+                <h3 class="font-bold">Prioritize calorie goal:</h3>
+                <p id="prioritizeCalories"></p>
             </div>
         </div>
     </div>
@@ -171,17 +175,18 @@
             .then(data => {
                 console.log('Received recommendations:', data);
                 const formatRecommendation = (recommendation) => {
-                    if (!recommendation.foods || recommendation.foods.length === 0) {
+                    if (!recommendation || !recommendation.foods || recommendation.foods.length === 0) {
                         return 'No recommendations available';
                     }
                     const foodList = recommendation.foods.map(food => 
-                        `${food.name} ${food.calories} (${food.protein})`
+                        `${food.name} ${food.calories}cal (${food.protein}g)`
                     ).join(', ');
-                    return `${foodList} -- Recommendation Total: ${recommendation.total_calories} (${recommendation.total_protein}) -- Day's Total: ${recommendation.day_total_calories} (${recommendation.day_total_protein})`;
+                    return `${foodList} -- Recommendation Total: ${recommendation.total_calories}cal (${recommendation.total_protein}g) -- Day's Total: ${recommendation.day_total_calories}cal (${recommendation.day_total_protein}g)`;
                 };
 
-                document.getElementById('proteinFirst').textContent = formatRecommendation(data.protein_first);
-                document.getElementById('calorieFirst').textContent = formatRecommendation(data.calorie_first);
+                document.getElementById('hitBoth').textContent = formatRecommendation(data.hit_both);
+                document.getElementById('prioritizeProtein').textContent = formatRecommendation(data.protein_first);
+                document.getElementById('prioritizeCalories').textContent = formatRecommendation(data.calorie_first);
                 document.getElementById('recommendationsContainer').classList.remove('hidden');
             })
             .catch((error) => {

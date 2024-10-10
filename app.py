@@ -413,41 +413,27 @@ def get_recommendations():
     
     conn.close()
     
-    protein_first, calorie_first = food_recommendation(total_calories, total_protein)
+    recommendations = food_recommendation(total_calories, total_protein)
 
-    # Calculate sums for protein_first recommendation
-    protein_first_foods = protein_first[0] if protein_first else []
-    protein_first_calories = sum(food.calories for food in protein_first_foods)
-    protein_first_protein = sum(food.protein for food in protein_first_foods)
+    formatted_recommendations = {}
 
-    # Calculate sums for calorie_first recommendation
-    calorie_first_foods = calorie_first[0] if calorie_first else []
-    calorie_first_calories = sum(food.calories for food in calorie_first_foods)
-    calorie_first_protein = sum(food.protein for food in calorie_first_foods)
+    for key, foods in recommendations.items():
+        if foods:
+            total_calories_rec = sum(food.calories for food in foods)
+            total_protein_rec = sum(food.protein for food in foods)
+            formatted_recommendations[key] = {
+                "foods": [
+                    {"name": food.name, "calories": food.calories, "protein": food.protein}
+                    for food in foods
+                ],
+                "total_calories": total_calories_rec,
+                "total_protein": total_protein_rec,
+                "day_total_calories": total_calories + total_calories_rec,
+                "day_total_protein": total_protein + total_protein_rec,
+            }
+        else:
+            formatted_recommendations[key] = None
 
-    formatted_recommendations = {
-        "protein_first": {
-            "foods": [
-                {"name": food.name, "calories": food.calories, "protein": food.protein}
-                for food in protein_first_foods
-            ],
-            "total_calories": protein_first_calories,
-            "total_protein": protein_first_protein,
-            "day_total_calories": total_calories + protein_first_calories,
-            "day_total_protein": total_protein + protein_first_protein,
-        },
-        "calorie_first": {
-            "foods": [
-                {"name": food.name, "calories": food.calories, "protein": food.protein}
-                for food in calorie_first_foods
-            ],
-            "total_calories": calorie_first_calories,
-            "total_protein": calorie_first_protein,
-            "day_total_calories": total_calories + calorie_first_calories,
-            "day_total_protein": total_protein + calorie_first_protein,
-        }
-    }
-    
     return jsonify(formatted_recommendations)
 
 def food_recommendation(total_calories, total_protein): 
@@ -474,53 +460,105 @@ def food_recommendation(total_calories, total_protein):
     conn.close()
 
     # Calculate remaining calories/protein for the day 
-    remaining_calories = CALORIE_GOAL - total_calories
-    remaining_protein = PROTEIN_GOAL - total_protein
+    remaining_calories = max(0, CALORIE_GOAL - total_calories)
+    remaining_protein = max(0, PROTEIN_GOAL - total_protein)
 
-    # Use the remaining calories/protein to recommend foods 
-    # 2 recommendations: 
-        # 1. hit protein goal, minimize calories
-        # 2. stay within calorie goal, maximize protein
-    dp = [[[0 for _ in range(remaining_protein + 1)] 
-           for _ in range(remaining_calories + 1)] 
-           for _ in range(n + 1)]
+    # # Use the remaining calories/protein to recommend foods 
+    # # 2 recommendations: 
+    #     # 1. hit protein goal, minimize calories
+    #     # 2. stay within calorie goal, maximize protein
+    # dp = [[[0 for _ in range(remaining_protein + 1)] 
+    #        for _ in range(remaining_calories + 1)] 
+    #        for _ in range(n + 1)]
 
-    # Fill the DP table
-    for i in range(1, n + 1):
-        for j in range(remaining_calories + 1):
-            for k in range(remaining_protein + 1):
-                if available_foods[i-1].calories <= j:
-                    new_protein = min(k, dp[i-1][j-available_foods[i-1].calories][k] + available_foods[i-1].protein)
-                    dp[i][j][k] = max(dp[i-1][j][k], new_protein)
+    # # Fill the DP table
+    # for i in range(1, n + 1):
+    #     for j in range(remaining_calories + 1):
+    #         for k in range(remaining_protein + 1):
+    #             if available_foods[i-1].calories <= j:
+    #                 new_protein = min(k, dp[i-1][j-available_foods[i-1].calories][k] + available_foods[i-1].protein)
+    #                 dp[i][j][k] = max(dp[i-1][j][k], new_protein)
+    #             else:
+    #                 dp[i][j][k] = dp[i-1][j][k]
+
+    # def backtrack(i: int, j: int, k: int):
+    #     if i == 0:
+    #         return []
+    #     if dp[i][j][k] > dp[i-1][j][k]:
+    #         return backtrack(i-1, j-available_foods[i-1].calories, max(0, k-available_foods[i-1].protein)) + [available_foods[i-1]]
+    #     return backtrack(i-1, j, k)
+
+    # # Generate recommendations
+    # protein_first = []
+    # calorie_first = []
+
+    # # 1. Hit protein goal, minimize calories
+    # for j in range(remaining_calories + 1):
+    #     if dp[n][j][remaining_protein] >= remaining_protein:
+    #         protein_first.append(backtrack(n, j, remaining_protein))
+    #         break
+
+    # # 2. Stay within calorie goal, maximize protein
+    # max_protein = dp[n][remaining_calories][remaining_protein]
+    # calorie_first.append(backtrack(n, remaining_calories, max_protein))
+
+    # # Sort recommendations
+    # protein_first.sort(key=lambda x: sum(food.calories for food in x))
+    # calorie_first.sort(key=lambda x: sum(food.protein for food in x), reverse=True)
+
+    # return protein_first, calorie_first
+    def knapsack(n, W, wt, val):
+        K = [[0 for _ in range(W + 1)] for _ in range(n + 1)]
+        for i in range(n + 1):
+            for w in range(W + 1):
+                if i == 0 or w == 0:
+                    K[i][w] = 0
+                elif wt[i-1] <= w:
+                    K[i][w] = max(val[i-1] + K[i-1][w-wt[i-1]], K[i-1][w])
                 else:
-                    dp[i][j][k] = dp[i-1][j][k]
+                    K[i][w] = K[i-1][w]
+        return K
 
-    def backtrack(i: int, j: int, k: int):
-        if i == 0:
-            return []
-        if dp[i][j][k] > dp[i-1][j][k]:
-            return backtrack(i-1, j-available_foods[i-1].calories, max(0, k-available_foods[i-1].protein)) + [available_foods[i-1]]
-        return backtrack(i-1, j, k)
+    def backtrack(K, wt, val, n, W):
+        res = []
+        w = W
+        for i in range(n, 0, -1):
+            if K[i][w] != K[i-1][w]:
+                res.append(available_foods[i-1])
+                w -= wt[i-1]
+        return res
 
-    # Generate recommendations
-    protein_first = []
-    calorie_first = []
+    weights = [food.calories for food in available_foods]
+    values = [food.protein for food in available_foods]
+    n = len(available_foods)
 
-    # 1. Hit protein goal, minimize calories
-    for j in range(remaining_calories + 1):
-        if dp[n][j][remaining_protein] >= remaining_protein:
-            protein_first.append(backtrack(n, j, remaining_protein))
+    hit_both = None
+    prioritize_protein = None
+    prioritize_calories = None
+
+    # Priority 1: hit_both
+    K = knapsack(n, remaining_calories, weights, values)
+    if K[n][remaining_calories] >= remaining_protein:
+        hit_both = backtrack(K, weights, values, n, remaining_calories)
+
+    # Priority 2: prioritize_protein (protein_first)
+    max_calories = sum(weights)
+    K = knapsack(n, max_calories, weights, values)
+    for cal in range(remaining_calories, max_calories + 1):
+        if K[n][cal] >= remaining_protein:
+            prioritize_protein = backtrack(K, weights, values, n, cal)
             break
 
-    # 2. Stay within calorie goal, maximize protein
-    max_protein = dp[n][remaining_calories][remaining_protein]
-    calorie_first.append(backtrack(n, remaining_calories, max_protein))
+    # Priority 3: prioritize_calories (calorie_first)
+    K = knapsack(n, remaining_calories, weights, values)
+    prioritize_calories = backtrack(K, weights, values, n, remaining_calories)
 
-    # Sort recommendations
-    protein_first.sort(key=lambda x: sum(food.calories for food in x))
-    calorie_first.sort(key=lambda x: sum(food.protein for food in x), reverse=True)
+    return {
+        "hit_both": hit_both,
+        "protein_first": prioritize_protein,
+        "calorie_first": prioritize_calories
+    }
 
-    return protein_first, calorie_first
 
 if __name__ == '__main__':
     init_db()
