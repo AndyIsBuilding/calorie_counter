@@ -1,0 +1,43 @@
+/* Base styles */
+.summary-table-container {
+    overflow-x: auto;
+  }
+  
+  .summary-table {
+    width: 100%;
+    table-layout: auto;
+  }
+  
+  .summary-table th,
+  .summary-table td {
+    padding: 0.5rem;
+    text-align: left;
+  }
+  
+  .summary-table .date-column {
+    width: 100px;
+    white-space: nowrap;
+  }
+  
+  .summary-table .summary-column {
+    width: auto;
+    min-width: 200px;
+  }
+  
+  /* Mobile styles */
+  @media (max-width: 767px) {
+    .summary-table .summary-column {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  
+  /* Larger viewport styles */
+  @media (min-width: 768px) {
+    .summary-table .summary-column {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+  }

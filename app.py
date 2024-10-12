@@ -463,50 +463,6 @@ def food_recommendation(total_calories, total_protein):
     remaining_calories = max(0, CALORIE_GOAL - total_calories)
     remaining_protein = max(0, PROTEIN_GOAL - total_protein)
 
-    # # Use the remaining calories/protein to recommend foods 
-    # # 2 recommendations: 
-    #     # 1. hit protein goal, minimize calories
-    #     # 2. stay within calorie goal, maximize protein
-    # dp = [[[0 for _ in range(remaining_protein + 1)] 
-    #        for _ in range(remaining_calories + 1)] 
-    #        for _ in range(n + 1)]
-
-    # # Fill the DP table
-    # for i in range(1, n + 1):
-    #     for j in range(remaining_calories + 1):
-    #         for k in range(remaining_protein + 1):
-    #             if available_foods[i-1].calories <= j:
-    #                 new_protein = min(k, dp[i-1][j-available_foods[i-1].calories][k] + available_foods[i-1].protein)
-    #                 dp[i][j][k] = max(dp[i-1][j][k], new_protein)
-    #             else:
-    #                 dp[i][j][k] = dp[i-1][j][k]
-
-    # def backtrack(i: int, j: int, k: int):
-    #     if i == 0:
-    #         return []
-    #     if dp[i][j][k] > dp[i-1][j][k]:
-    #         return backtrack(i-1, j-available_foods[i-1].calories, max(0, k-available_foods[i-1].protein)) + [available_foods[i-1]]
-    #     return backtrack(i-1, j, k)
-
-    # # Generate recommendations
-    # protein_first = []
-    # calorie_first = []
-
-    # # 1. Hit protein goal, minimize calories
-    # for j in range(remaining_calories + 1):
-    #     if dp[n][j][remaining_protein] >= remaining_protein:
-    #         protein_first.append(backtrack(n, j, remaining_protein))
-    #         break
-
-    # # 2. Stay within calorie goal, maximize protein
-    # max_protein = dp[n][remaining_calories][remaining_protein]
-    # calorie_first.append(backtrack(n, remaining_calories, max_protein))
-
-    # # Sort recommendations
-    # protein_first.sort(key=lambda x: sum(food.calories for food in x))
-    # calorie_first.sort(key=lambda x: sum(food.protein for food in x), reverse=True)
-
-    # return protein_first, calorie_first
     def knapsack(n, W, wt, val):
         K = [[0 for _ in range(W + 1)] for _ in range(n + 1)]
         for i in range(n + 1):
