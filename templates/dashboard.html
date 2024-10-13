@@ -14,7 +14,12 @@
         // Handle Quick Add button clicks
         $(document).on('click', '.quick-add-btn', function(e) {
             e.preventDefault();
-            var foodId = $(this).data('food-id');
+            var $button = $(this);
+            var foodId = $button.data('food-id');
+            
+            // Add pressed effect
+            $button.addClass('pressed');
+            
             $.ajax({
                 url: "{{ url_for('log_quick_food') }}",
                 type: 'POST',
@@ -23,7 +28,18 @@
                     if (response.success) {
                         updateTodaysLog(response.log_entry);
                         updateTotals(response.totals);
+                        
+                        // Show success message
+                        showToast('✅ Food added!');
                     }
+                },
+                complete: function() {
+                    // Remove pressed effect after a short delay
+                    setTimeout(function() {
+                        $button.removeClass('pressed');
+                        // Force a repaint to ensure the button returns to its original state
+                        $button[0].offsetHeight;
+                    }, 300);
                 }
             });
         });
@@ -97,10 +113,24 @@
 
     function addQuickAddButton(food) {
         $('.quick-add-grid').append(
-            '<button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="' + food.id + '">' +
+            '<button type="button" class="quick-add-btn w-full py-2 px-4 rounded-md text-sm" data-food-id="' + food.id + '">' +
                 food.name +
             '</button>'
         );
+    }
+
+    function showToast(message) {
+        var toast = $('<div class="toast">' + message + '</div>');
+        $('body').append(toast);
+        setTimeout(function() {
+            toast.addClass('show');
+            setTimeout(function() {
+                toast.removeClass('show');
+                setTimeout(function() {
+                    toast.remove();
+                }, 300);
+            }, 2000);
+        }, 100);
     }
 </script>
 {% endblock %}
