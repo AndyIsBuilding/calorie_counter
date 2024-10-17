@@ -1,0 +1,20 @@
+{
+    "name": "Calorie Counter",
+    "short_name": "CalorieCounter",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#ffffff",
+    "icons": [
+        {
+            "src": "icons/calorie_tracking.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/calorie_tracking.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
