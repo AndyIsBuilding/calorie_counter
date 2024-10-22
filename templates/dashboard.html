@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Calorie Tracker{% endblock %}
+{% block title %}Calorie Counter{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
@@ -136,13 +136,6 @@
 {% endblock %}
 
 {% block content %}
-<nav class="bg-blue-600 p-4 text-white">
-    <div class="container mx-auto flex justify-between items-center">
-        <h1 class="text-2xl font-bold">Calorie Tracker</h1>
-        <a href="{{ url_for('logout') }}" class="bg-blue-500 hover:bg-blue-700 py-2 px-4 rounded">Logout</a>
-    </div>
-</nav>
-
 <div class="container mx-auto mt-8 p-4">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div class="bg-white p-6 rounded-lg shadow-md">
@@ -288,7 +281,10 @@
 
     <div class="mt-8">
         <a href="{{ url_for('export_csv') }}" class="bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600">Export to CSV</a>
+        <a href="{{ url_for('edit_history') }}" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Edit Previous Days</a>
     </div>
+
+    <!-- Add this button somewhere appropriate in your dashboard.html file -->
 </div>
 
 {% endblock %}

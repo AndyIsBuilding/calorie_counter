@@ -118,6 +118,115 @@ def dashboard():
                            total_calories=total_calories, total_protein=total_protein,
                            weekly_summaries=weekly_summaries)
 
+@app.route('/edit_history')
+@login_required
+def edit_history():
+    # Get the date from the query parameter, or use today's date if not provided
+    date_str = request.args.get('date', get_local_date().isoformat())
+    
+    try:
+        # Parse the date string into a datetime object
+        edit_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Invalid date format. Please use YYYY-MM-DD.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    conn = sqlite3.connect(app.config['DB_PATH'])
+    c = conn.cursor()
+    
+    # Fetch all foods
+    c.execute("SELECT * FROM foods ORDER BY name")
+    foods = c.fetchall()
+    
+    # Fetch the daily log for the selected date
+    c.execute("""SELECT id, food_name, calories, protein 
+                 FROM daily_log
+                 WHERE date = ? AND user_id = ?""", (date_str, current_user.id))
+    daily_log = [{"id": row[0], "name": row[1], "calories": row[2], "protein": row[3]} for row in c.fetchall()]
+    
+    # Fetch the daily summary for the selected date
+    c.execute("""SELECT total_calories, total_protein, summary 
+                 FROM daily_summary
+                 WHERE date = ? AND user_id = ?""", (date_str, current_user.id))
+    summary = c.fetchone()
+    
+    conn.close()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            'daily_log': daily_log,
+            'summary': summary
+        })
+    
+    return render_template('edit_history.html', 
+                           edit_date=edit_date, 
+                           foods=foods, 
+                           daily_log=daily_log, 
+                           summary=summary)
+
+
+@app.route('/update_history', methods=['POST'])
+@login_required
+def update_history():
+    edit_date = request.form['edit_date']
+    print(f"Edit date: {edit_date}")
+    existing_food_ids = request.form.getlist('existing_food_id[]')
+    new_food_names = request.form.getlist('new_food_name[]')
+    new_food_calories = request.form.getlist('new_food_calories[]')
+    new_food_protein = request.form.getlist('new_food_protein[]')
+
+    conn = sqlite3.connect(app.config['DB_PATH'])
+    c = conn.cursor()
+
+    # Remove foods that were deleted on the edit page
+    c.execute("""DELETE FROM daily_log 
+                 WHERE date = ? AND user_id = ? AND id NOT IN ({})""".format(','.join(['?']*len(existing_food_ids))), 
+              [edit_date, current_user.id] + existing_food_ids)
+
+    # Add new foods
+    for name, calories, protein in zip(new_food_names, new_food_calories, new_food_protein):
+        c.execute("""INSERT INTO daily_log (date, food_name, calories, protein, user_id)
+                     VALUES (?, ?, ?, ?, ?)""", 
+                  (edit_date, name, calories, protein, current_user.id))
+
+    # Fetch all foods for the day after updates
+    c.execute("""SELECT food_name, calories, protein
+                 FROM daily_log
+                 WHERE date = ? AND user_id = ?
+                 ORDER BY id""", (edit_date, current_user.id))
+    foods = c.fetchall()
+
+    # Create the summary string
+    summary = ", ".join([f"{name} {calories} ({protein})" for name, calories, protein in foods])
+
+    # Calculate total calories and protein
+    total_calories = sum(int(food[1]) for food in foods)
+    total_protein = sum(int(food[2]) for food in foods)
+
+    # Check if there's a daily summary for the current date
+    c.execute("""SELECT id FROM daily_summary 
+                 WHERE date = ? AND user_id = ?""", 
+              (edit_date, current_user.id))
+    existing_summary = c.fetchone()
+
+    if existing_summary:
+        # Update the existing summary
+        c.execute("""UPDATE daily_summary 
+                     SET total_calories = ?, total_protein = ?, summary = ?
+                     WHERE date = ? AND user_id = ?""", 
+                  (total_calories, total_protein, summary, edit_date, current_user.id))
+    else:
+        # Insert a new summary
+        c.execute("""INSERT INTO daily_summary 
+                     (date, total_calories, total_protein, summary, user_id)
+                     VALUES (?, ?, ?, ?, ?)""", 
+                  (edit_date, total_calories, total_protein, summary, current_user.id))
+
+    conn.commit()
+    conn.close()
+
+    flash(f'Daily log for {edit_date} updated successfully!', 'success')
+    return redirect(url_for('edit_history'))
 
 @app.route('/')
 def index():
@@ -515,7 +624,28 @@ def food_recommendation(total_calories, total_protein):
         "calorie_first": prioritize_calories
     }
 
+@app.route('/api/testimonials')
+def get_testimonials():
+    testimonials = [
+        {
+            "quote": "Calorie Counter has made it so easy for me to keep on top of my nutrition. I've never felt better!",
+            "author": "Sarah L.",
+            "role": "Fitness Enthusiast",
+        },
+        {
+            "quote": "As a nutritionist, I recommend Calorie Counter to all my clients. It's user-friendly and accurate.",
+            "author": "Dr. Michael Chen",
+            "role": "Registered Dietitian",
+        },
+        {
+            "quote": "This app has been a game-changer in my weight loss journey. The insights are invaluable.",
+            "author": "Chris Thompson",
+            "role": "User since 2022",
+        },
+    ]
+    return jsonify(testimonials)
 
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, port=5001)
+
