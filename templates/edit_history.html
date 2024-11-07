@@ -39,7 +39,10 @@
         
         <button type="button" id="add-food" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 mt-4 mb-6">Add Food</button>
         
-        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-3">Update Daily Log</button>
+        <div class="flex gap-4">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-3">Update Daily Log</button>
+            <a href="{{ url_for('dashboard') }}" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mt-3">Cancel</a>
+        </div>
     </form>
 
     <script>
