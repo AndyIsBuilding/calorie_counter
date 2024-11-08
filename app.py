@@ -23,14 +23,17 @@ class Food(NamedTuple):
     protein: int = 0
 
 
-# Ensure the instance folder exists
-try:
-    os.makedirs(app.instance_path)
-except OSError:
-    pass
+# Set the database path based on the environment
+if 'PYTHONANYWHERE_SITE' in os.environ:
+    # We're on PythonAnywhere (production)
+    DB_PATH = os.getenv('DB_PATH')
+else:
+    # We're in local development
+    DB_PATH = 'instance/food_tracker.db'
 
-# Configure the database URI
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(app.instance_path, "food_tracker.db")}'
+# Update app configuration
+app.config['DB_PATH'] = DB_PATH
+
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -43,7 +46,7 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
@@ -53,7 +56,7 @@ def load_user(user_id):
     return None
 
 def init_db():
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
@@ -76,7 +79,7 @@ def get_local_date():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT * FROM foods ORDER BY name")  # Order foods alphabetically
     foods = c.fetchall()
@@ -127,7 +130,7 @@ def edit_history():
         flash('Invalid date format. Please use YYYY-MM-DD.', 'error')
         return redirect(url_for('dashboard'))
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # Fetch all foods
@@ -171,7 +174,7 @@ def update_history():
     new_food_calories = request.form.getlist('new_food_calories[]')
     new_food_protein = request.form.getlist('new_food_protein[]')
 
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     # Remove foods that were deleted on the edit page
@@ -237,7 +240,7 @@ def quick_add_food():
     calories = int(request.form['calories'])
     protein = int(request.form['protein'])
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO foods (name, calories, protein) VALUES (?, ?, ?)", (name, calories, protein))
     food_id = c.lastrowid
@@ -266,7 +269,7 @@ def log_food():
     total_calories = int(calories * servings)
     total_protein = int(protein * servings)
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     today = get_local_date().isoformat()
@@ -302,7 +305,7 @@ def log_quick_food():
     food_id = request.form['food_id']
     today = get_local_date().isoformat()
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     c.execute("SELECT name, calories, protein FROM foods WHERE id = ?", (food_id,))
@@ -344,7 +347,7 @@ def log_quick_food():
 @app.route('/remove_food/<int:log_id>', methods=['POST'])
 @login_required
 def remove_food(log_id):
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # Delete the log entry
@@ -371,7 +374,7 @@ def remove_food(log_id):
 def save_summary():
     today = get_local_date().isoformat()
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # Fetch all foods logged for today
@@ -401,7 +404,7 @@ def save_summary():
 @app.route('/export_csv')
 @login_required
 def export_csv():
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""SELECT date, summary, total_calories, total_protein 
                  FROM daily_summary
@@ -430,7 +433,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = c.fetchone()
@@ -458,7 +461,7 @@ def register():
 
     if request.method == 'POST':
         # Check if there's already a user in the database
-        conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM users")
         user_count = c.fetchone()[0]
@@ -472,7 +475,7 @@ def register():
         password = request.form['password']
         hashed_password = generate_password_hash(password)
         
-        conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         try:
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
@@ -507,7 +510,7 @@ def internal_server_error(error):
 def get_recommendations():
     today = get_local_date().isoformat()
     
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     c.execute("SELECT SUM(calories) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
@@ -547,7 +550,7 @@ def food_recommendation(total_calories, total_protein):
     Return a list of recommended foods"""
 
 
-    conn = sqlite3.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     # Get today's date

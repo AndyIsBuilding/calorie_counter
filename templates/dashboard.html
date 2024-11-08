@@ -132,7 +132,60 @@
             }, 2000);
         }, 100);
     }
+
+    let touchStartY = 0;
+    let touchEndY = 0;
+    const THRESHOLD = 150; // minimum pull distance in pixels
+    const refreshIndicator = $('<div class="refresh-indicator">Pull down to refresh</div>');
+
+    document.addEventListener('touchstart', e => {
+        touchStartY = e.touches[0].pageY;
+        if (window.scrollY === 0) {
+            $('body').prepend(refreshIndicator);
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+        if (window.scrollY === 0) {
+            touchEndY = e.touches[0].pageY;
+            const distance = touchEndY - touchStartY;
+            
+            if (distance > 0) {
+                refreshIndicator.css('transform', `translateY(${Math.min(distance/2, THRESHOLD)}px)`);
+                if (distance > THRESHOLD) {
+                    refreshIndicator.text('Release to refresh');
+                } else {
+                    refreshIndicator.text('Pull down to refresh');
+                }
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', e => {
+        const distance = touchEndY - touchStartY;
+        
+        if (distance > THRESHOLD && window.scrollY === 0) {
+            refreshIndicator.text('Refreshing...');
+            window.location.reload();
+        } else {
+            refreshIndicator.remove();
+        }
+    });
 </script>
+
+<style>
+    .refresh-indicator {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        background: #f3f4f6;
+        transform: translateY(-100%);
+        z-index: 1000;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
