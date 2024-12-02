@@ -104,6 +104,16 @@ def dashboard():
         total_calories = sum(food[2] for food in daily_log)
         total_protein = sum(food[3] for food in daily_log)
     
+    conn.close()
+    return render_template('dashboard.html', foods=foods, daily_log=daily_log, 
+                         total_calories=total_calories, total_protein=total_protein)
+
+@app.route('/settings')
+@login_required
+def settings():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
     # Fetch weekly summaries for the last 7 days
     seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
     c.execute("""SELECT date, total_calories, total_protein, summary 
@@ -113,9 +123,12 @@ def dashboard():
     weekly_summaries = c.fetchall()
     
     conn.close()
-    return render_template('dashboard.html', foods=foods, daily_log=daily_log, 
-                           total_calories=total_calories, total_protein=total_protein,
-                           weekly_summaries=weekly_summaries)
+    
+    # For now, using constants for goals. Later these will come from user settings
+    return render_template('settings.html', 
+                         weekly_summaries=weekly_summaries,
+                         calorie_goal=CALORIE_GOAL,
+                         protein_goal=PROTEIN_GOAL)
 
 @app.route('/edit_history')
 @login_required

@@ -36,9 +36,11 @@
         Calorie Counter helps you monitor your calorie and protein intake, <br />
         making it simple to achieve your health and fitness goals.
       </p>
-      <button class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 text-lg">
-        Get Started Free <i data-lucide="arrow-right" class="ml-2"></i>
-      </button>
+      <a href="{{ url_for('register') }}" class="inline-block">
+        <button class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 text-lg">
+          Get Started Free <i data-lucide="arrow-right" class="ml-2"></i>
+        </button>
+      </a>
     </section>
 
     <section id="features" class="mb-16">
@@ -63,9 +65,11 @@
             Join thousands of users who have transformed their health with Calorie Counter.
             Sign up today and take the first step towards a healthier you.
           </p>
-          <button class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 text-lg">
-            Sign Up Now <i data-lucide="arrow-right" class="ml-2"></i>
-          </button>
+          <a href="{{ url_for('register') }}" class="inline-block">
+            <button class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 text-lg">
+              Sign Up Now <i data-lucide="arrow-right" class="ml-2"></i>
+            </button>
+          </a>
         </div>
       </div>
     </section>

@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+
+{% block navbar %}
+{% include 'navbar.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="pt-32 md:pt-20">
+    <div class="container mx-auto p-4">
+        <!-- User Settings Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-bold mb-6">User Settings</h2>
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                    <p class="text-gray-600">{{ current_user.username }}</p>
+                </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="calorie-goal">Daily Calorie Goal</label>
+                    <input type="number" id="calorie-goal" name="calorie_goal" value="{{ calorie_goal }}" 
+                           class="w-full px-4 py-2 border rounded-md" disabled>
+                </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="protein-goal">Daily Protein Goal (g)</label>
+                    <input type="number" id="protein-goal" name="protein_goal" value="{{ protein_goal }}" 
+                           class="w-full px-4 py-2 border rounded-md" disabled>
+                </div>
+                <p class="text-sm text-gray-500 italic">* Settings editing will be enabled in a future update</p>
+            </div>
+        </div>
+
+        <!-- Historical Data Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                <h2 class="text-2xl font-bold mb-4 sm:mb-0">Historical Data</h2>
+                <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <a href="{{ url_for('export_csv') }}" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 text-center">Export to CSV</a>
+                    <a href="{{ url_for('edit_history') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 text-center">Edit Previous Days</a>
+                </div>
+            </div>
+            
+            {% if weekly_summaries %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="px-4 py-2 text-left">Date</th>
+                            <th class="px-4 py-2 text-left">Calories</th>
+                            <th class="px-4 py-2 text-left">Protein</th>
+                            <th class="px-4 py-2 text-left">Foods</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for date, calories, protein, summary in weekly_summaries %}
+                        <tr class="border-t">
+                            <td class="px-4 py-2">{{ date }}</td>
+                            <td class="px-4 py-2">{{ calories }}</td>
+                            <td class="px-4 py-2">{{ protein }}g</td>
+                            <td class="px-4 py-2">{{ summary }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-600">No historical data available.</p>
+            {% endif %}
+        </div>
+
+        <!-- Trends Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold mb-6">Trends</h2>
+            <p class="text-gray-600 italic">Charts and trends analysis coming soon...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
