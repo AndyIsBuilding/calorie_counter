@@ -1,10 +1,11 @@
 {% extends "layout.html" %}
 
-{% block title %}Calorie Counter{% endblock %}
+{% block navbar %}
+{% include 'navbar.html' %}
+{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     function setFormAction(action) {
         document.getElementById('addFoodForm').action = action;
@@ -107,13 +108,46 @@
     }
 
     function updateTotals(totals) {
+        // Update the original totals at bottom of page
         $('#total-calories').text(totals.calories);
         $('#total-protein').text(totals.protein + 'g');
+        
+        // Update desktop header totals
+        $('#header-calories').text(totals.calories);
+        $('#header-protein').text(totals.protein);
+        
+        // Update mobile header totals
+        $('#mobile-header-calories').text(totals.calories);
+        $('#mobile-header-protein').text(totals.protein);
+        
+        // Calculate percentages
+        const calorieGoal = parseInt($('#calorie-goal').text());
+        const proteinGoal = parseInt($('#protein-goal').text());
+        
+        const caloriePercentage = Math.min((totals.calories / calorieGoal) * 100, 100);
+        const proteinPercentage = Math.min((totals.protein / proteinGoal) * 100, 100);
+        
+        // Update all progress bars (desktop and mobile)
+        $('#calorie-progress, #mobile-calorie-progress').css('width', caloriePercentage + '%');
+        $('#protein-progress, #mobile-protein-progress').css('width', proteinPercentage + '%');
+        
+        // Add color indicators based on progress
+        if (caloriePercentage > 100) {
+            $('#calorie-progress, #mobile-calorie-progress').removeClass('bg-blue-500').addClass('bg-red-500');
+        } else {
+            $('#calorie-progress, #mobile-calorie-progress').removeClass('bg-red-500').addClass('bg-blue-500');
+        }
+        
+        if (proteinPercentage > 100) {
+            $('#protein-progress, #mobile-protein-progress').removeClass('bg-green-500').addClass('bg-yellow-500');
+        } else {
+            $('#protein-progress, #mobile-protein-progress').removeClass('yellow-500').addClass('bg-green-500');
+        }
     }
 
     function addQuickAddButton(food) {
         $('.quick-add-grid').append(
-            '<button type="button" class="quick-add-btn w-full py-2 px-4 rounded-md text-sm" data-food-id="' + food.id + '">' +
+            '<button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="' + food.id + '">' +
                 food.name +
             '</button>'
         );
@@ -132,212 +166,190 @@
             }, 2000);
         }, 100);
     }
-
-    let touchStartY = 0;
-    let touchEndY = 0;
-    const THRESHOLD = 150; // minimum pull distance in pixels
-    const refreshIndicator = $('<div class="refresh-indicator">Pull down to refresh</div>');
-
-    document.addEventListener('touchstart', e => {
-        touchStartY = e.touches[0].pageY;
-        if (window.scrollY === 0) {
-            $('body').prepend(refreshIndicator);
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchmove', e => {
-        if (window.scrollY === 0) {
-            touchEndY = e.touches[0].pageY;
-            const distance = touchEndY - touchStartY;
-            
-            if (distance > 0) {
-                refreshIndicator.css('transform', `translateY(${Math.min(distance/2, THRESHOLD)}px)`);
-                if (distance > THRESHOLD) {
-                    refreshIndicator.text('Release to refresh');
-                } else {
-                    refreshIndicator.text('Pull down to refresh');
-                }
-            }
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchend', e => {
-        const distance = touchEndY - touchStartY;
-        
-        if (distance > THRESHOLD && window.scrollY === 0) {
-            refreshIndicator.text('Refreshing...');
-            window.location.reload();
-        } else {
-            refreshIndicator.remove();
-        }
-    });
 </script>
 
 <style>
-    .refresh-indicator {
+    .toast {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        text-align: center;
-        padding: 10px;
-        background: #f3f4f6;
-        transform: translateY(-100%);
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        background: #4CAF50;
+        color: white;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
         z-index: 1000;
+    }
+
+    .toast.show {
+        opacity: 1;
+    }
+
+    .quick-add-btn {
+        transition: all 0.2s ease;
+    }
+
+    .quick-add-btn.pressed {
+        transform: scale(0.95);
+        opacity: 0.9;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto mt-8 p-4">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-bold mb-4">Add Food</h2>
-            <form id="addFoodForm" action="" method="post" class="space-y-4">
-                <input type="text" name="name" placeholder="Food Name" required class="w-full px-4 py-2 border rounded-md">
-                <input type="number" name="calories" placeholder="Calories" required class="w-full px-4 py-2 border rounded-md">
-                <input type="number" name="protein" placeholder="Protein (g)" required class="w-full px-4 py-2 border rounded-md">
-                <input type="number" name="servings" placeholder="Servings" value="1" min="0.1" step="0.1" required class="w-full px-4 py-2 border rounded-md">
-                <div class="flex space-x-2">
-                    <button type="submit" onclick="setFormAction('{{ url_for('quick_add_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-green-500 hover:text-white border-2 border-green-500">Add to Quick Add</button>
-                    <button type="submit" onclick="setFormAction('{{ url_for('log_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-blue-500 border-2 border-blue-500 hover:text-white">Log Food</button>
+<!-- Update the padding at the top of your content div -->
+<div class="pt-32 md:pt-20">
+    <div class="container mx-auto p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4">Add Food</h2>
+                <form id="addFoodForm" action="" method="post" class="space-y-4">
+                    <input type="text" name="name" placeholder="Food Name" required class="w-full px-4 py-2 border rounded-md">
+                    <input type="number" name="calories" placeholder="Calories" required class="w-full px-4 py-2 border rounded-md">
+                    <input type="number" name="protein" placeholder="Protein (g)" required class="w-full px-4 py-2 border rounded-md">
+                    <input type="number" name="servings" placeholder="Servings" value="1" min="0.1" step="0.1" required class="w-full px-4 py-2 border rounded-md">
+                    <div class="flex space-x-2">
+                        <button type="submit" onclick="setFormAction('{{ url_for('quick_add_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-green-500 hover:text-white border-2 border-green-500">Add to Quick Add</button>
+                        <button type="submit" onclick="setFormAction('{{ url_for('log_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-blue-500 border-2 border-blue-500 hover:text-white">Log Food</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4">Quick Add</h2>
+                <div class="quick-add-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {% for food in foods %}
+                    <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="{{ food[0] }}">
+                        {{ food[1] }}
+                    </button>
+                    {% endfor %}
                 </div>
-            </form>
-        </div>
-
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-bold mb-4">Quick Add</h2>
-            <div class="quick-add-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {% for food in foods %}
-                <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="{{ food[0] }}">
-                    {{ food[1] }}
-                </button>
-                {% endfor %}
             </div>
         </div>
-    </div>
 
-    <!-- Recommendations to hit your goals -->    
-    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-bold mb-4">Food Recommendations -- What to eat to hit your goals</h2>
-        <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
-            Show Recommendations
-        </button>
-        <div id="recommendationsContainer" class="mt-4 hidden">
-            <div class="mb-4">
-                <h3 class="font-bold">Hit both calorie and protein goals:</h3>
-                <p id="hitBoth"></p>
-            </div>
-            <div class="mb-4">
-                <h3 class="font-bold">Prioritize protein goal:</h3>
-                <p id="prioritizeProtein"></p>
-            </div>
-            <div class="mb-4">
-                <h3 class="font-bold">Prioritize calorie goal:</h3>
-                <p id="prioritizeCalories"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Script to show recommendations -->
-    <script>
-        document.getElementById('showRecommendationsBtn').addEventListener('click', function() {
-            fetch('/get_recommendations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Received recommendations:', data);
-                const formatRecommendation = (recommendation) => {
-                    if (!recommendation || !recommendation.foods || recommendation.foods.length === 0) {
-                        return 'No recommendations available';
-                    }
-                    const foodList = recommendation.foods.map(food => 
-                        `${food.name} ${food.calories}cal (${food.protein}g)`
-                    ).join(', ');
-                    return `${foodList} -- Recommendation Total: ${recommendation.total_calories}cal (${recommendation.total_protein}g) -- Day's Total: ${recommendation.day_total_calories}cal (${recommendation.day_total_protein}g)`;
-                };
-
-                document.getElementById('hitBoth').textContent = formatRecommendation(data.hit_both);
-                document.getElementById('prioritizeProtein').textContent = formatRecommendation(data.protein_first);
-                document.getElementById('prioritizeCalories').textContent = formatRecommendation(data.calorie_first);
-                document.getElementById('recommendationsContainer').classList.remove('hidden');
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-            });
-        });
-    </script>
-
-    
-    <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-bold mb-4">Today's Log</h2>
-        <table class="w-full">
-            <thead>
-                <tr class="bg-gray-200">
-                    <th class="p-2 text-left">Food</th>
-                    <th class="p-2 text-left">Calories</th>
-                    <th class="p-2 text-left">Protein</th>
-                    <th class="p-2 text-left">Action</th>
-                </tr>
-            </thead>
-            <tbody id="daily-log">
-                {% for log in daily_log %}
-                <tr data-log-id="{{ log[0] }}">
-                    <td class="p-2">{{ log[1] }}</td>
-                    <td class="p-2">{{ log[2] }}</td>
-                    <td class="p-2">{{ log[3] }}g</td>
-                    <td class="p-2">
-                        <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}">Remove</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div class="mt-4">
-            <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
-            <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
-        </div>
-        <form action="{{ url_for('save_summary') }}" method="post" class="mt-4">
-            <button type="submit" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
-        </form>
-
+        <!-- Recommendations to hit your goals -->    
         <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-bold mb-4">Historical Daily Summaries</h2>
-            <div class="summary-table-container">
-                <table class="summary-table">
-                    <thead>
-                        <tr class="bg-gray-200">
-                            <th class="date-column">Date</th>
-                            <th>Total Calories</th>
-                            <th>Total Protein</th>
-                            <th class="summary-column">Summary</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for summary in weekly_summaries %}
-                        <tr>
-                            <td class="date-column">{{ summary[0] }}</td>
-                            <td>{{ summary[1] }}</td>
-                            <td>{{ summary[2] }}g</td>
-                            <td class="summary-column">{{ summary[3] }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <h2 class="text-xl font-bold mb-4">Food Recommendations -- What to eat to hit your goals</h2>
+            <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+                Show Recommendations
+            </button>
+            <div id="recommendationsContainer" class="mt-4 hidden">
+                <div class="mb-4">
+                    <h3 class="font-bold">Hit both calorie and protein goals:</h3>
+                    <p id="hitBoth"></p>
+                </div>
+                <div class="mb-4">
+                    <h3 class="font-bold">Prioritize protein goal:</h3>
+                    <p id="prioritizeProtein"></p>
+                </div>
+                <div class="mb-4">
+                    <h3 class="font-bold">Prioritize calorie goal:</h3>
+                    <p id="prioritizeCalories"></p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="mt-8">
-        <a href="{{ url_for('export_csv') }}" class="bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600">Export to CSV</a>
-        <a href="{{ url_for('edit_history') }}" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Edit Previous Days</a>
-    </div>
+        <!-- Script to show recommendations -->
+        <script>
+            document.getElementById('showRecommendationsBtn').addEventListener('click', function() {
+                fetch('/get_recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Received recommendations:', data);
+                    const formatRecommendation = (recommendation) => {
+                        if (!recommendation || !recommendation.foods || recommendation.foods.length === 0) {
+                            return 'No recommendations available';
+                        }
+                        const foodList = recommendation.foods.map(food => 
+                            `${food.name} ${food.calories}cal (${food.protein}g)`
+                        ).join(', ');
+                        return `${foodList} -- Recommendation Total: ${recommendation.total_calories}cal (${recommendation.total_protein}g) -- Day's Total: ${recommendation.day_total_calories}cal (${recommendation.day_total_protein}g)`;
+                    };
 
-    <!-- Add this button somewhere appropriate in your dashboard.html file -->
+                    document.getElementById('hitBoth').textContent = formatRecommendation(data.hit_both);
+                    document.getElementById('prioritizeProtein').textContent = formatRecommendation(data.protein_first);
+                    document.getElementById('prioritizeCalories').textContent = formatRecommendation(data.calorie_first);
+                    document.getElementById('recommendationsContainer').classList.remove('hidden');
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+            });
+        </script>
+
+        
+        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4">Today's Log</h2>
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">Food</th>
+                        <th class="p-2 text-left">Calories</th>
+                        <th class="p-2 text-left">Protein</th>
+                        <th class="p-2 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="daily-log">
+                    {% for log in daily_log %}
+                    <tr data-log-id="{{ log[0] }}">
+                        <td class="p-2">{{ log[1] }}</td>
+                        <td class="p-2">{{ log[2] }}</td>
+                        <td class="p-2">{{ log[3] }}g</td>
+                        <td class="p-2">
+                            <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}">Remove</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="mt-4">
+                <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
+                <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
+            </div>
+            <form action="{{ url_for('save_summary') }}" method="post" class="mt-4">
+                <button type="submit" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
+            </form>
+
+            <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4">Historical Daily Summaries</h2>
+                <div class="summary-table-container">
+                    <table class="summary-table">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="date-column">Date</th>
+                                <th>Total Calories</th>
+                                <th>Total Protein</th>
+                                <th class="summary-column">Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for summary in weekly_summaries %}
+                            <tr>
+                                <td class="date-column">{{ summary[0] }}</td>
+                                <td>{{ summary[1] }}</td>
+                                <td>{{ summary[2] }}g</td>
+                                <td class="summary-column">{{ summary[3] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <a href="{{ url_for('export_csv') }}" class="bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600">Export to CSV</a>
+            <a href="{{ url_for('edit_history') }}" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Edit Previous Days</a>
+        </div>
+
+        <!-- Add this button somewhere appropriate in your dashboard.html file -->
+    </div>
 </div>
 
 {% endblock %}

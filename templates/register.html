@@ -2,8 +2,12 @@
 
 {% block title %}Register - Calorie Counter{% endblock %}
 
+{% block navbar %}
+{% include 'navbar.html' %}
+{% endblock %}
+
 {% block content %}
-<div class="w-96 mx-auto">
+<div class="w-96 mx-auto mt-20">
     <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">Register</h1>
     
     <form action="{{ url_for('register') }}" method="post" class="space-y-4">
