@@ -11,17 +11,17 @@
             <div class="hidden md:flex gap-8">
                 <div>
                     <div class="text-sm text-gray-600">Calories</div>
-                    <div class="text-xl font-bold"><span id="header-calories">{{ total_calories }}</span> / <span id="calorie-goal">2000</span></div>
+                    <div class="text-xl font-bold"><span id="header-calories">{{ total_calories }}</span> / <span id="calorie-goal">2900</span></div>
                     <div class="w-32 h-2 bg-gray-200 rounded-full mt-1">
-                        {% set calorie_percentage = ((total_calories/2000 * 100)|round) if total_calories <= 2000 else 100 %}
+                        {% set calorie_percentage = ((total_calories/2900 * 100)|round) if total_calories <= 2900 else 100 %}
                         <div id="calorie-progress" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: {{ calorie_percentage }}%"></div>
                     </div>
                 </div>
                 <div>
                     <div class="text-sm text-gray-600">Protein</div>
-                    <div class="text-xl font-bold"><span id="header-protein">{{ total_protein }}</span>g / <span id="protein-goal">150</span>g</div>
+                    <div class="text-xl font-bold"><span id="header-protein">{{ total_protein }}</span>g / <span id="protein-goal">220</span>g</div>
                     <div class="w-32 h-2 bg-gray-200 rounded-full mt-1">
-                        {% set protein_percentage = ((total_protein/150 * 100)|round) if total_protein <= 150 else 100 %}
+                        {% set protein_percentage = ((total_protein/220 * 100)|round) if total_protein <= 220 else 100 %}
                         <div id="protein-progress" class="h-full bg-green-500 rounded-full transition-all duration-300" style="width: {{ protein_percentage }}%"></div>
                     </div>
                 </div>
@@ -73,6 +73,7 @@
         </div>
     </div>
 </nav>
+<div class="mt-16"></div> <!-- Add this line to create space below the navbar -->
 {% else %}
 <!-- Regular Navbar for other pages -->
 <nav class="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
@@ -119,4 +120,5 @@
         </div>
     </div>
 </nav>
-{% endif %} 
+<div class="mt-16"></div> <!-- Add this line to create space below the navbar -->
+{% endif %}

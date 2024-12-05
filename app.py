@@ -106,29 +106,7 @@ def dashboard():
     
     conn.close()
     return render_template('dashboard.html', foods=foods, daily_log=daily_log, 
-                         total_calories=total_calories, total_protein=total_protein)
-
-@app.route('/settings')
-@login_required
-def settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    # Fetch weekly summaries for the last 7 days
-    seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
-    c.execute("""SELECT date, total_calories, total_protein, summary 
-                 FROM daily_summary 
-                 WHERE date >= ? AND user_id = ? 
-                 ORDER BY date DESC""", (seven_days_ago, current_user.id))
-    weekly_summaries = c.fetchall()
-    
-    conn.close()
-    
-    # For now, using constants for goals. Later these will come from user settings
-    return render_template('settings.html', 
-                         weekly_summaries=weekly_summaries,
-                         calorie_goal=CALORIE_GOAL,
-                         protein_goal=PROTEIN_GOAL)
+                           total_calories=total_calories, total_protein=total_protein)
 
 @app.route('/edit_history')
 @login_required
@@ -656,6 +634,21 @@ def get_testimonials():
         },
     ]
     return jsonify(testimonials)
+
+@app.route('/settings') 
+def settings(): 
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
+    c.execute("""SELECT date, total_calories, total_protein, summary 
+                 FROM daily_summary 
+                 WHERE date >= ? AND user_id = ? 
+                 ORDER BY date DESC""", (seven_days_ago, current_user.id))
+    weekly_summaries = c.fetchall()
+
+    conn.close()
+    return render_template('settings.html', weekly_summaries=weekly_summaries)
+
 
 if __name__ == '__main__':
     init_db()

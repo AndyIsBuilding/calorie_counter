@@ -1,5 +1,9 @@
 {% extends "layout.html" %}
 
+{% block extra_head %} 
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% endblock extra_head %} 
+
 {% block navbar %}
 {% include 'navbar.html' %}
 {% endblock %}
@@ -40,23 +44,23 @@
             </div>
             
             {% if weekly_summaries %}
-            <div class="overflow-x-auto">
-                <table class="min-w-full table-auto">
+            <div class="summary-table-container">
+                <table class="summary-table">
                     <thead>
-                        <tr class="bg-gray-100">
-                            <th class="px-4 py-2 text-left">Date</th>
-                            <th class="px-4 py-2 text-left">Calories</th>
-                            <th class="px-4 py-2 text-left">Protein</th>
-                            <th class="px-4 py-2 text-left">Foods</th>
+                        <tr class="bg-gray-200">
+                            <th class="date-column">Date</th>
+                            <th>Total Calories</th>
+                            <th>Total Protein</th>
+                            <th class="summary-column">Summary</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for date, calories, protein, summary in weekly_summaries %}
                         <tr class="border-t">
-                            <td class="px-4 py-2">{{ date }}</td>
-                            <td class="px-4 py-2">{{ calories }}</td>
-                            <td class="px-4 py-2">{{ protein }}g</td>
-                            <td class="px-4 py-2">{{ summary }}</td>
+                            <td class="date-column">{{ date }}</td>
+                            <td>{{ calories }}</td>
+                            <td>{{ protein }}g</td>
+                            <td class="summary-column">{{ summary }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
