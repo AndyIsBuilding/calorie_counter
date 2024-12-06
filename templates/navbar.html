@@ -47,17 +47,17 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <div class="text-sm text-gray-600">Calories</div>
-                    <div class="text-lg font-bold"><span id="mobile-header-calories">{{ total_calories }}</span> / <span id="mobile-calorie-goal">2000</span></div>
+                    <div class="text-lg font-bold"><span id="mobile-header-calories">{{ total_calories }}</span> / <span id="mobile-calorie-goal">2900</span></div>
                     <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set calorie_percentage = ((total_calories/2000 * 100)|round) if total_calories <= 2000 else 100 %}
+                        {% set calorie_percentage = ((total_calories/2900 * 100)|round) if total_calories <= 2900 else 100 %}
                         <div id="mobile-calorie-progress" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: {{ calorie_percentage }}%"></div>
                     </div>
                 </div>
                 <div>
                     <div class="text-sm text-gray-600">Protein</div>
-                    <div class="text-lg font-bold"><span id="mobile-header-protein">{{ total_protein }}</span>g / <span id="mobile-protein-goal">150</span>g</div>
+                    <div class="text-lg font-bold"><span id="mobile-header-protein">{{ total_protein }}</span>g / <span id="mobile-protein-goal">220</span>g</div>
                     <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set protein_percentage = ((total_protein/150 * 100)|round) if total_protein <= 150 else 100 %}
+                        {% set protein_percentage = ((total_protein/220 * 100)|round) if total_protein <= 220 else 100 %}
                         <div id="mobile-protein-progress" class="h-full bg-green-500 rounded-full transition-all duration-300" style="width: {{ protein_percentage }}%"></div>
                     </div>
                 </div>
