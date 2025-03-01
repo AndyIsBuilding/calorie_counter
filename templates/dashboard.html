@@ -127,6 +127,18 @@
         const caloriePercentage = Math.min((totals.calories / calorieGoal) * 100, 100);
         const proteinPercentage = Math.min((totals.protein / proteinGoal) * 100, 100);
         
+        // Update percentage indicators
+        const caloriePercentageText = Math.round(totals.calories / calorieGoal * 100) + '%';
+        const proteinPercentageText = Math.round(totals.protein / proteinGoal * 100) + '%';
+        
+        // Update desktop percentage indicators
+        $('#header-calories-percentage').text(caloriePercentageText);
+        $('#header-protein-percentage').text(proteinPercentageText);
+        
+        // Update mobile percentage indicators
+        $('#mobile-header-calories-percentage').text(caloriePercentageText);
+        $('#mobile-header-protein-percentage').text(proteinPercentageText);
+        
         // Update all progress bars (desktop and mobile)
         $('#calorie-progress, #mobile-calorie-progress').css('width', caloriePercentage + '%');
         $('#protein-progress, #mobile-protein-progress').css('width', proteinPercentage + '%');

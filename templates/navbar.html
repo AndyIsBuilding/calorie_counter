@@ -13,11 +13,11 @@
                     <div class="text-sm text-gray-600">Calories</div>
                     <div class="text-xl font-bold">
                         <span id="header-calories">{{ total_calories }}</span> / <span id="calorie-goal">{{ current_user.calorie_goal }}</span>
-                        <span class="text-sm text-gray-400 ml-1">
-                            ({{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%)
+                        <span class="text-sm text-gray-400 ml-1" id="header-calories-percentage">
+                            {{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-32 h-2 bg-gray-200 rounded-full mt-1">
+                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
                         {% set calorie_percentage = ((total_calories/current_user.calorie_goal * 100)|round) if total_calories <= current_user.calorie_goal else 100 %}
                         <div id="calorie-progress" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: {{ calorie_percentage }}%"></div>
                     </div>
@@ -26,11 +26,11 @@
                     <div class="text-sm text-gray-600">Protein</div>
                     <div class="text-xl font-bold">
                         <span id="header-protein">{{ total_protein }}</span>g / <span id="protein-goal">{{ current_user.protein_goal }}</span>g
-                        <span class="text-sm text-gray-400 ml-1">
-                            ({{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%)
+                        <span class="text-sm text-gray-400 ml-1" id="header-protein-percentage">
+                            {{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-32 h-2 bg-gray-200 rounded-full mt-1">
+                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
                         {% set protein_percentage = ((total_protein/current_user.protein_goal * 100)|round) if total_protein <= current_user.protein_goal else 100 %}
                         <div id="protein-progress" class="h-full bg-green-500 rounded-full transition-all duration-300" style="width: {{ protein_percentage }}%"></div>
                     </div>
@@ -59,8 +59,8 @@
                     <div class="text-sm text-gray-600">Calories</div>
                     <div class="text-lg font-bold">
                         <span id="mobile-header-calories">{{ total_calories }}</span> / <span id="mobile-calorie-goal">{{ current_user.calorie_goal }}</span>
-                        <span class="text-xs text-gray-400 ml-1">
-                            ({{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%)
+                        <span class="text-xs text-gray-400 ml-1" id="mobile-header-calories-percentage">
+                            {{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%
                         </span>
                     </div>
                     <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
@@ -72,8 +72,8 @@
                     <div class="text-sm text-gray-600">Protein</div>
                     <div class="text-lg font-bold">
                         <span id="mobile-header-protein">{{ total_protein }}</span>g / <span id="mobile-protein-goal">{{ current_user.protein_goal }}</span>g
-                        <span class="text-xs text-gray-400 ml-1">
-                            ({{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%)
+                        <span class="text-xs text-gray-400 ml-1" id="mobile-header-protein-percentage">
+                            {{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%
                         </span>
                     </div>
                     <div class="w-full h-2 bg-gray-200 rounded-full mt-1">

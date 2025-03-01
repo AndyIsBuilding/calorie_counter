@@ -13,8 +13,9 @@ app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 
-CALORIE_GOAL = 2000 
-PROTEIN_GOAL = 220 
+# Remove global constants
+# CALORIE_GOAL = 2000 
+# PROTEIN_GOAL = 220 
 
 class Food(NamedTuple):
     id: int
@@ -34,6 +35,9 @@ else:
 # Update app configuration
 app.config['DB_PATH'] = DB_PATH
 
+# Default goals for new users
+DEFAULT_CALORIE_GOAL = 2000
+DEFAULT_PROTEIN_GOAL = 100
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -209,11 +213,27 @@ def update_history():
                      WHERE date = ? AND user_id = ?""", 
                   (total_calories, total_protein, summary, edit_date, current_user.id))
     else:
-        # Insert a new summary
+        # For a new summary of a past date, find the most recent previous summary
+        # and use its goal values
+        calorie_goal = current_user.calorie_goal
+        protein_goal = current_user.protein_goal
+        
+        # Find the most recent summary before the edit date
+        c.execute("""SELECT calorie_goal, protein_goal FROM daily_summary 
+                     WHERE date < ? AND user_id = ? 
+                     ORDER BY date DESC LIMIT 1""", 
+                  (edit_date, current_user.id))
+        previous_summary = c.fetchone()
+        
+        if previous_summary:
+            # Use the goals from the previous summary
+            calorie_goal, protein_goal = previous_summary
+        
+        # Insert a new summary with the determined goal values
         c.execute("""INSERT INTO daily_summary 
                      (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
                      VALUES (?, ?, ?, ?, ?, ?, ?)""", 
-                  (edit_date, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL, PROTEIN_GOAL))
+                  (edit_date, total_calories, total_protein, summary, current_user.id, calorie_goal, protein_goal))
 
     conn.commit()
     conn.close()
@@ -385,9 +405,10 @@ def save_summary():
     total_calories = sum(food[1] for food in foods)
     total_protein = sum(food[2] for food in foods)
     
-    # Update the daily_summary table
+    # Update the daily_summary table with the user's current goals
     c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)""", (today, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL, PROTEIN_GOAL))
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""", 
+                (today, total_calories, total_protein, summary, current_user.id, current_user.calorie_goal, current_user.protein_goal))
     
     conn.commit()
     conn.close()
@@ -473,7 +494,7 @@ def register():
         c = conn.cursor()
         try:
             c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
-                     (username, hashed_password, CALORIE_GOAL, PROTEIN_GOAL))
+                     (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL))
             conn.commit()
             conn.close()
             flash('Registration successful. Please log in.', 'success')
