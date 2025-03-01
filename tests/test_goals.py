@@ -1,4 +1,4 @@
-import pytest
+import pytest #noqa 
 import sqlite3
 from datetime import datetime, timedelta
 

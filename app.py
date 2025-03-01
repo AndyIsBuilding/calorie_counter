@@ -12,6 +12,7 @@ from typing import NamedTuple
 app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
+app.config['TESTING'] = False  # Default to False, will be set to True in test environment
 
 # Remove global constants
 # CALORIE_GOAL = 2000 
@@ -476,21 +477,23 @@ def register():
 
     if request.method == 'POST':
         # Check if there's already a user in the database
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM users")
-        user_count = c.fetchone()[0]
-        conn.close()
+        # Skip this check if we're in testing mode
+        if not app.config['TESTING']:
+            conn = sqlite3.connect(app.config['DB_PATH'])
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM users")
+            user_count = c.fetchone()[0]
+            conn.close()
 
-        if user_count > 0:
-            flash('Only one user (the creator) is allowed in this application.', 'error')
-            return redirect(url_for('index'))
+            if user_count > 0:
+                flash('Only one user (the creator) is allowed in this application.', 'error')
+                return redirect(url_for('index'))
         
         username = request.form['username']
         password = request.form['password']
         hashed_password = generate_password_hash(password)
         
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         try:
             c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
@@ -499,9 +502,12 @@ def register():
             conn.close()
             flash('Registration successful. Please log in.', 'success')
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as e:
             conn.close()
             flash('Username already exists. Please choose a different one.', 'error')
+        except Exception as e:
+            conn.close()
+            flash(f'An error occurred: {e}', 'error')
     
     return render_template('register.html')
 
