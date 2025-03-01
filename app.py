@@ -67,6 +67,7 @@ def init_db():
                   FOREIGN KEY(user_id) REFERENCES users(id))''')
     c.execute("""CREATE TABLE IF NOT EXISTS daily_summary
                  (id INTEGER PRIMARY KEY, date TEXT, total_calories INTEGER, total_protein INTEGER, summary TEXT, user_id INTEGER,
+                  calorie_goal INTEGER DEFAULT 2900,
                   FOREIGN KEY(user_id) REFERENCES users(id))""")
     conn.commit()
     conn.close()
@@ -135,7 +136,7 @@ def edit_history():
     daily_log = [{"id": row[0], "name": row[1], "calories": row[2], "protein": row[3]} for row in c.fetchall()]
     
     # Fetch the daily summary for the selected date
-    c.execute("""SELECT total_calories, total_protein, summary 
+    c.execute("""SELECT total_calories, total_protein, summary, calorie_goal 
                  FROM daily_summary
                  WHERE date = ? AND user_id = ?""", (date_str, current_user.id))
     summary = c.fetchone()
@@ -194,13 +195,13 @@ def update_history():
     total_protein = sum(int(food[2]) for food in foods)
 
     # Check if there's a daily summary for the current date
-    c.execute("""SELECT id FROM daily_summary 
+    c.execute("""SELECT id, calorie_goal FROM daily_summary 
                  WHERE date = ? AND user_id = ?""", 
               (edit_date, current_user.id))
     existing_summary = c.fetchone()
 
     if existing_summary:
-        # Update the existing summary
+        # Update the existing summary, preserving the calorie_goal
         c.execute("""UPDATE daily_summary 
                      SET total_calories = ?, total_protein = ?, summary = ?
                      WHERE date = ? AND user_id = ?""", 
@@ -208,9 +209,9 @@ def update_history():
     else:
         # Insert a new summary
         c.execute("""INSERT INTO daily_summary 
-                     (date, total_calories, total_protein, summary, user_id)
-                     VALUES (?, ?, ?, ?, ?)""", 
-                  (edit_date, total_calories, total_protein, summary, current_user.id))
+                     (date, total_calories, total_protein, summary, user_id, calorie_goal)
+                     VALUES (?, ?, ?, ?, ?, ?)""", 
+                  (edit_date, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL))
 
     conn.commit()
     conn.close()
@@ -383,8 +384,8 @@ def save_summary():
     total_protein = sum(food[2] for food in foods)
     
     # Update the daily_summary table
-    c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id)
-                 VALUES (?, ?, ?, ?, ?)""", (today, total_calories, total_protein, summary, current_user.id))
+    c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id, calorie_goal)
+                 VALUES (?, ?, ?, ?, ?, ?)""", (today, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL))
     
     conn.commit()
     conn.close()
@@ -397,7 +398,7 @@ def save_summary():
 def export_csv():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("""SELECT date, summary, total_calories, total_protein 
+    c.execute("""SELECT date, summary, total_calories, total_protein, calorie_goal 
                  FROM daily_summary
                  WHERE user_id = ?
                  ORDER BY date""", (current_user.id,))
@@ -406,7 +407,7 @@ def export_csv():
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date', 'Food Summary', 'Total Calories', 'Total Protein'])
+    writer.writerow(['Date', 'Food Summary', 'Total Calories', 'Total Protein', 'Calorie Goal'])
     writer.writerows(data)
     
     return send_file(
@@ -640,7 +641,7 @@ def settings():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
-    c.execute("""SELECT date, total_calories, total_protein, summary 
+    c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal 
                  FROM daily_summary 
                  WHERE date >= ? AND user_id = ? 
                  ORDER BY date DESC""", (seven_days_ago, current_user.id))
