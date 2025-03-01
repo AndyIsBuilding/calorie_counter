@@ -55,7 +55,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for date, calories, protein, summary in weekly_summaries %}
+                        {% for date, calories, protein, summary, calorie_goal, protein_goal in weekly_summaries %}
                         <tr class="border-t">
                             <td class="date-column">{{ date }}</td>
                             <td>{{ calories }}</td>

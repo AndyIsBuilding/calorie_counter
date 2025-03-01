@@ -45,7 +45,9 @@ def init_test_db(db_path):
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL
+        password TEXT NOT NULL,
+        calorie_goal INTEGER DEFAULT 2000,
+        protein_goal INTEGER DEFAULT 100
     )
     ''')
     
@@ -72,7 +74,8 @@ def init_test_db(db_path):
         total_calories INTEGER,
         total_protein INTEGER,
         summary TEXT,
-        calorie_goal INTEGER DEFAULT 2900,
+        calorie_goal INTEGER DEFAULT 2000,
+        protein_goal INTEGER DEFAULT 100,
         FOREIGN KEY (user_id) REFERENCES users (id)
     )
     ''')
@@ -91,8 +94,8 @@ def init_test_db(db_path):
     
     # Insert test user with proper password hash
     test_password = generate_password_hash('password')
-    c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-              ('testuser', test_password))
+    c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)",
+              ('testuser', test_password, 2000, 100))
     
     conn.commit()
     conn.close()

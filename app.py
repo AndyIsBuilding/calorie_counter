@@ -13,7 +13,7 @@ app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 
-CALORIE_GOAL = 2900 
+CALORIE_GOAL = 2000 
 PROTEIN_GOAL = 220 
 
 class Food(NamedTuple):
@@ -40,9 +40,11 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 class User(UserMixin):
-    def __init__(self, id, username):
+    def __init__(self, id, username, calorie_goal=2000, protein_goal=100):
         self.id = id
         self.username = username
+        self.calorie_goal = calorie_goal
+        self.protein_goal = protein_goal
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -52,14 +54,14 @@ def load_user(user_id):
     user = c.fetchone()
     conn.close()
     if user:
-        return User(user[0], user[1])
+        return User(user[0], user[1], user[3], user[4])
     return None
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
+                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100)''')
     c.execute('''CREATE TABLE IF NOT EXISTS foods
                  (id INTEGER PRIMARY KEY, name TEXT, calories INTEGER, protein INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS daily_log
@@ -67,7 +69,7 @@ def init_db():
                   FOREIGN KEY(user_id) REFERENCES users(id))''')
     c.execute("""CREATE TABLE IF NOT EXISTS daily_summary
                  (id INTEGER PRIMARY KEY, date TEXT, total_calories INTEGER, total_protein INTEGER, summary TEXT, user_id INTEGER,
-                  calorie_goal INTEGER DEFAULT 2900,
+                  calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100,
                   FOREIGN KEY(user_id) REFERENCES users(id))""")
     conn.commit()
     conn.close()
@@ -136,7 +138,7 @@ def edit_history():
     daily_log = [{"id": row[0], "name": row[1], "calories": row[2], "protein": row[3]} for row in c.fetchall()]
     
     # Fetch the daily summary for the selected date
-    c.execute("""SELECT total_calories, total_protein, summary, calorie_goal 
+    c.execute("""SELECT total_calories, total_protein, summary, calorie_goal, protein_goal 
                  FROM daily_summary
                  WHERE date = ? AND user_id = ?""", (date_str, current_user.id))
     summary = c.fetchone()
@@ -195,13 +197,13 @@ def update_history():
     total_protein = sum(int(food[2]) for food in foods)
 
     # Check if there's a daily summary for the current date
-    c.execute("""SELECT id, calorie_goal FROM daily_summary 
+    c.execute("""SELECT id, calorie_goal, protein_goal FROM daily_summary 
                  WHERE date = ? AND user_id = ?""", 
               (edit_date, current_user.id))
     existing_summary = c.fetchone()
 
     if existing_summary:
-        # Update the existing summary, preserving the calorie_goal
+        # Update the existing summary, preserving the calorie_goal and protein_goal
         c.execute("""UPDATE daily_summary 
                      SET total_calories = ?, total_protein = ?, summary = ?
                      WHERE date = ? AND user_id = ?""", 
@@ -209,9 +211,9 @@ def update_history():
     else:
         # Insert a new summary
         c.execute("""INSERT INTO daily_summary 
-                     (date, total_calories, total_protein, summary, user_id, calorie_goal)
-                     VALUES (?, ?, ?, ?, ?, ?)""", 
-                  (edit_date, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL))
+                     (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)""", 
+                  (edit_date, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL, PROTEIN_GOAL))
 
     conn.commit()
     conn.close()
@@ -384,8 +386,8 @@ def save_summary():
     total_protein = sum(food[2] for food in foods)
     
     # Update the daily_summary table
-    c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id, calorie_goal)
-                 VALUES (?, ?, ?, ?, ?, ?)""", (today, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL))
+    c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""", (today, total_calories, total_protein, summary, current_user.id, CALORIE_GOAL, PROTEIN_GOAL))
     
     conn.commit()
     conn.close()
@@ -398,7 +400,7 @@ def save_summary():
 def export_csv():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("""SELECT date, summary, total_calories, total_protein, calorie_goal 
+    c.execute("""SELECT date, summary, total_calories, total_protein, calorie_goal, protein_goal 
                  FROM daily_summary
                  WHERE user_id = ?
                  ORDER BY date""", (current_user.id,))
@@ -407,7 +409,7 @@ def export_csv():
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date', 'Food Summary', 'Total Calories', 'Total Protein', 'Calorie Goal'])
+    writer.writerow(['Date', 'Food Summary', 'Total Calories', 'Total Protein', 'Calorie Goal', 'Protein Goal'])
     writer.writerows(data)
     
     return send_file(
@@ -432,7 +434,7 @@ def login():
         conn.close()
         
         if user and check_password_hash(user[2], password):
-            user_obj = User(user[0], user[1])
+            user_obj = User(user[0], user[1], user[3], user[4])
             login_user(user_obj)
             return redirect(url_for('dashboard'))
         else:
@@ -470,7 +472,8 @@ def register():
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
+                     (username, hashed_password, CALORIE_GOAL, PROTEIN_GOAL))
             conn.commit()
             conn.close()
             flash('Registration successful. Please log in.', 'success')
@@ -560,8 +563,8 @@ def food_recommendation(total_calories, total_protein):
     conn.close()
 
     # Calculate remaining calories/protein for the day 
-    remaining_calories = max(0, CALORIE_GOAL - total_calories)
-    remaining_protein = max(0, PROTEIN_GOAL - total_protein)
+    remaining_calories = max(0, current_user.calorie_goal - total_calories)
+    remaining_protein = max(0, current_user.protein_goal - total_protein)
 
     def knapsack(n, W, wt, val):
         K = [[0 for _ in range(W + 1)] for _ in range(n + 1)]
@@ -641,14 +644,14 @@ def settings():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
-    c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal 
+    c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal, protein_goal 
                  FROM daily_summary 
                  WHERE date >= ? AND user_id = ? 
                  ORDER BY date DESC""", (seven_days_ago, current_user.id))
     weekly_summaries = c.fetchall()
 
     conn.close()
-    return render_template('settings.html', weekly_summaries=weekly_summaries)
+    return render_template('settings.html', weekly_summaries=weekly_summaries, calorie_goal=current_user.calorie_goal, protein_goal=current_user.protein_goal)
 
 
 if __name__ == '__main__':

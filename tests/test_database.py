@@ -141,6 +141,8 @@ def test_init_db():
             assert 'id' in column_names
             assert 'username' in column_names
             assert 'password' in column_names
+            assert 'calorie_goal' in column_names
+            assert 'protein_goal' in column_names
             
             # Foods table should have id, name, calories, and protein columns
             c.execute("PRAGMA table_info(foods)")
@@ -173,6 +175,7 @@ def test_init_db():
             assert 'summary' in column_names
             assert 'user_id' in column_names
             assert 'calorie_goal' in column_names
+            assert 'protein_goal' in column_names
             
             conn.close()
     finally:

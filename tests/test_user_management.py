@@ -22,8 +22,8 @@ def test_user_creation(app):
         hashed_password = generate_password_hash(test_password)
         
         # Insert the user
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
-                 (test_username, hashed_password))
+        c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
+                 (test_username, hashed_password, 2000, 100))
         conn.commit()
         
         # Verify the user was created
@@ -56,8 +56,8 @@ def test_user_password_validation(app):
         c.execute("DELETE FROM users WHERE username = ?", (test_username,))
         
         # Insert the user
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
-                 (test_username, hashed_password))
+        c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
+                 (test_username, hashed_password, 2000, 100))
         conn.commit()
         
         # Get the user
@@ -94,8 +94,8 @@ def test_user_login(app, client):
         
         if user_count == 0:
             # Insert the user if no users exist
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                     (test_username, hashed_password))
+            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)",
+                     (test_username, hashed_password, 2000, 100))
             conn.commit()
             
             # Test login functionality directly
@@ -223,8 +223,8 @@ def test_user_logout(app, client):
         c.execute("DELETE FROM users WHERE username = ?", (test_username,))
         
         # Insert the user
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
-                 (test_username, hashed_password))
+        c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
+                 (test_username, hashed_password, 2000, 100))
         conn.commit()
         conn.close()
         
@@ -269,8 +269,8 @@ def test_login_route(app, client):
         
         if user_count == 0:
             # Insert the user if no users exist
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                     (test_username, hashed_password))
+            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)",
+                     (test_username, hashed_password, 2000, 100))
             conn.commit()
             
             # Test login with correct credentials
