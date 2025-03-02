@@ -45,37 +45,52 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 class User(UserMixin):
-    def __init__(self, id, username, calorie_goal=DEFAULT_CALORIE_GOAL, protein_goal=DEFAULT_PROTEIN_GOAL, weight_goal=None):
+    def __init__(self, id, username, calorie_goal=DEFAULT_CALORIE_GOAL, protein_goal=DEFAULT_PROTEIN_GOAL, weight_goal=None, weight_unit=0):
         self.id = id
         self.username = username
         self.calorie_goal = calorie_goal
         self.protein_goal = protein_goal
         self.weight_goal = weight_goal
+        self.weight_unit = weight_unit  # 0 for kg, 1 for lbs
     
-    def update_goals(self, calorie_goal, protein_goal, weight_goal=None):
-        """Update the user's calorie, protein, and weight goals"""
+    def update_goals(self, calorie_goal, protein_goal, weight_goal=None, weight_unit=None):
+        """Update the user's calorie, protein, weight goals and weight unit preference"""
         self.calorie_goal = calorie_goal
         self.protein_goal = protein_goal
         
-        # Only update weight_goal if it's provided
+        # Update weight_goal and weight_unit if provided
         if weight_goal is not None:
             self.weight_goal = weight_goal
+        
+        if weight_unit is not None:
+            self.weight_unit = weight_unit
             
-            # Update the database with all goals
-            conn = sqlite3.connect(DB_PATH)
-            c = conn.cursor()
-            c.execute("UPDATE users SET calorie_goal = ?, protein_goal = ?, weight_goal = ? WHERE id = ?", 
+        # Update the database with all settings
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Check if weight_unit column exists
+        try:
+            c.execute("SELECT weight_unit FROM users WHERE id = ?", (self.id,))
+            # If we get here, the column exists
+            c.execute("""UPDATE users SET 
+                        calorie_goal = ?, 
+                        protein_goal = ?, 
+                        weight_goal = ?,
+                        weight_unit = ? 
+                        WHERE id = ?""", 
+                    (calorie_goal, protein_goal, weight_goal, weight_unit, self.id))
+        except sqlite3.OperationalError:
+            # Column doesn't exist, just update the other fields
+            c.execute("""UPDATE users SET 
+                        calorie_goal = ?, 
+                        protein_goal = ?, 
+                        weight_goal = ?
+                        WHERE id = ?""", 
                     (calorie_goal, protein_goal, weight_goal, self.id))
-            conn.commit()
-            conn.close()
-        else:
-            # Update just calorie and protein goals
-            conn = sqlite3.connect(DB_PATH)
-            c = conn.cursor()
-            c.execute("UPDATE users SET calorie_goal = ?, protein_goal = ? WHERE id = ?", 
-                    (calorie_goal, protein_goal, self.id))
-            conn.commit()
-            conn.close()
+            
+        conn.commit()
+        conn.close()
         
         return True
     
@@ -83,6 +98,12 @@ class User(UserMixin):
         """Log the user's weight for a specific date"""
         if date is None:
             date = get_local_date().isoformat()
+            
+        # Convert weight to kg for storage if user preference is lbs
+        stored_weight = weight
+        if self.weight_unit == 1:  # If user prefers lbs
+            # Convert lbs to kg for storage (1 lb = 0.45359237 kg)
+            stored_weight = weight * 0.45359237
             
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -93,11 +114,11 @@ class User(UserMixin):
         
         if existing_log:
             # Update existing log
-            c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (weight, existing_log[0]))
+            c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (stored_weight, existing_log[0]))
         else:
             # Insert new log
             c.execute("INSERT INTO weight_logs (date, weight, user_id) VALUES (?, ?, ?)", 
-                     (date, weight, self.id))
+                     (date, stored_weight, self.id))
         
         conn.commit()
         conn.close()
@@ -117,7 +138,15 @@ class User(UserMixin):
         
         conn.close()
         
-        return logs
+        # Convert weights to user's preferred unit
+        converted_logs = []
+        for date, weight in logs:
+            if self.weight_unit == 1:  # If user prefers lbs
+                # Convert kg to lbs (1 kg = 2.20462 lbs)
+                weight = round(weight * 2.20462, 1)
+            converted_logs.append((date, weight))
+            
+        return converted_logs
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -129,7 +158,9 @@ def load_user(user_id):
     if user:
         # Check if weight_goal column exists in the result
         weight_goal = user[5] if len(user) > 5 else None
-        return User(user[0], user[1], user[3], user[4], weight_goal)
+        # Check if weight_unit column exists in the result
+        weight_unit = user[6] if len(user) > 6 else 0  # Default to kg (0)
+        return User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
     return None
 
 def init_db():
@@ -157,6 +188,12 @@ def init_db():
         c.execute("SELECT weight_goal FROM users LIMIT 1")
     except sqlite3.OperationalError:
         c.execute("ALTER TABLE users ADD COLUMN weight_goal REAL DEFAULT NULL")
+    
+    # Add weight_unit column to users table if it doesn't exist
+    try:
+        c.execute("SELECT weight_unit FROM users LIMIT 1")
+    except sqlite3.OperationalError:
+        c.execute("ALTER TABLE users ADD COLUMN weight_unit INTEGER DEFAULT 0")  # Default to kg (0)
     
     conn.commit()
     conn.close()
@@ -538,7 +575,10 @@ def login():
         conn.close()
         
         if user and check_password_hash(user[2], password):
-            user_obj = User(user[0], user[1], user[3], user[4], user[5])
+            # Get weight_goal and weight_unit if they exist
+            weight_goal = user[5] if len(user) > 5 else None
+            weight_unit = user[6] if len(user) > 6 else 0  # Default to kg (0)
+            user_obj = User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
             login_user(user_obj)
             return redirect(url_for('dashboard'))
         else:
@@ -578,8 +618,8 @@ def register():
         conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal, weight_goal) VALUES (?, ?, ?, ?, ?)", 
-                     (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL, None))
+            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal, weight_goal, weight_unit) VALUES (?, ?, ?, ?, ?, ?)", 
+                     (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL, None, 0))
             conn.commit()
             conn.close()
             flash('Registration successful. Please log in.', 'success')
@@ -812,6 +852,7 @@ def update_settings():
     protein_goal = request.form.get('protein_goal', type=int)
     weight_goal = request.form.get('weight_goal', type=float)
     current_weight = request.form.get('current_weight', type=float)
+    weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
     
     # Validate the input
     if calorie_goal is None or protein_goal is None:
@@ -823,7 +864,7 @@ def update_settings():
         return redirect(url_for('settings'))
     
     # Update the user's goals using the User class method
-    current_user.update_goals(calorie_goal, protein_goal, weight_goal)
+    current_user.update_goals(calorie_goal, protein_goal, weight_goal, weight_unit)
     
     # Log the current weight if provided
     if current_weight is not None and current_weight > 0:

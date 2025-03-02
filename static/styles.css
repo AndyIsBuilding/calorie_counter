@@ -120,3 +120,16 @@
   height: 100%;
   transition: width 0.5s ease;
 }
+
+/* Progress fill color variants */
+.progress-fill.bg-blue-500 {
+  background-color: #3b82f6;
+}
+
+.progress-fill.bg-green-500 {
+  background-color: #10b981;
+}
+
+.progress-fill.bg-red-500 {
+  background-color: #ef4444;
+}
