@@ -241,15 +241,12 @@
     </div>
 </div>
 
-<!-- Success Message Toast -->
+<!-- Success Message Toast - Using global toast function now -->
 {% if success_message %}
-<div id="success-toast" class="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg">
-    {{ success_message }}
-</div>
 <script>
-    setTimeout(function() {
-        document.getElementById('success-toast').style.display = 'none';
-    }, 3000);
+    document.addEventListener('DOMContentLoaded', function() {
+        showToast('{{ success_message }}', 'success');
+    });
 </script>
 {% endif %}
 
@@ -351,6 +348,43 @@
         
         proteinInput.addEventListener('input', function() {
             checkFormChanged();
+        });
+
+        // Form submission with AJAX
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Use AJAX to submit the form
+            $.ajax({
+                url: "{{ url_for('update_settings') }}",
+                type: "POST",
+                data: $(form).serialize(),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    // Toast will be handled by the global AJAX success handler
+                    if (response.redirect) {
+                        // Reload the page after a short delay to allow the toast to be seen
+                        setTimeout(function() {
+                            window.location.href = response.redirect;
+                        }, 1000);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Show error toast
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.toast) {
+                            showToast(response.toast.message, response.toast.category);
+                        } else {
+                            showToast('An error occurred. Please try again.', 'error');
+                        }
+                    } catch (e) {
+                        showToast('An error occurred. Please try again.', 'error');
+                    }
+                }
+            });
         });
     });
 </script>

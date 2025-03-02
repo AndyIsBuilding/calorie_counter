@@ -69,24 +69,7 @@
     }
 }
 
-.toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #99de9c;
-    color: black;
-    padding: 16px;
-    border-radius: 4px;
-    text-align: center;
-    z-index: 100; /* Ensure toast appears above the navbar */
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.toast.show {
-    opacity: 1;
-}
+/* Toast styles are now defined in layout.html */
 
 /* Settings page styles */
 .input-error {

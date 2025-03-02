@@ -14,6 +14,35 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random se
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 app.config['TESTING'] = False  # Default to False, will be set to True in test environment
 
+# Helper function for JSON responses with toast messages
+def toast_response(message, category='success', redirect_url=None, **kwargs):
+    """
+    Create a JSON response with toast message.
+    
+    Args:
+        message (str): The message to display in the toast
+        category (str): The category of the message (success, error, warning, info)
+        redirect_url (str, optional): URL to redirect to after showing the toast
+        **kwargs: Additional data to include in the response
+        
+    Returns:
+        flask.Response: JSON response with toast message
+    """
+    response_data = {
+        'toast': {
+            'message': message,
+            'category': category
+        }
+    }
+    
+    if redirect_url:
+        response_data['redirect'] = redirect_url
+        
+    # Add any additional data
+    response_data.update(kwargs)
+    
+    return jsonify(response_data)
+
 # Remove global constants
 # CALORIE_GOAL = 2000 
 # PROTEIN_GOAL = 220 
@@ -418,19 +447,21 @@ def log_food():
     conn.commit()
     conn.close()
     
-    return jsonify({
-        'success': True,
-        'log_entry': {
+    return toast_response(
+        message=f"Added {name} to your log",
+        category="success",
+        success=True,
+        log_entry={
             'id': log_id,
             'food_name': name,
             'calories': total_calories,
             'protein': total_protein
         },
-        'totals': {
+        totals={
             'calories': total_calories_sum,
             'protein': total_protein_sum
         }
-    })
+    )
 
 
 @app.route('/log_quick_food', methods=['POST'])
@@ -533,6 +564,15 @@ def save_summary():
     conn.commit()
     conn.close()
     
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return toast_response(
+            message='Daily summary saved successfully!',
+            category='success',
+            redirect_url=url_for('dashboard')
+        )
+    
+    # For non-AJAX requests, use flash and redirect
     flash('Daily summary saved successfully!', 'success')
     return redirect(url_for('dashboard'))
 
@@ -856,10 +896,20 @@ def update_settings():
     
     # Validate the input
     if calorie_goal is None or protein_goal is None:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return toast_response(
+                message='Invalid input. Please enter valid numbers for calorie and protein goals.',
+                category='error'
+            )
         flash('Invalid input. Please enter valid numbers for calorie and protein goals.', 'error')
         return redirect(url_for('settings'))
     
     if calorie_goal <= 0 or protein_goal <= 0:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return toast_response(
+                message='Calorie and protein goals must be positive numbers.',
+                category='error'
+            )
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
     
@@ -873,7 +923,15 @@ def update_settings():
     else:
         flash_message = 'Settings updated successfully!'
     
-    # Redirect back to the settings page with a success message
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return toast_response(
+            message=flash_message,
+            category='success',
+            redirect_url=url_for('settings')
+        )
+    
+    # For non-AJAX requests, use flash and redirect
     flash(flash_message, 'success')
     return redirect(url_for('settings'))
 

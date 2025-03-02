@@ -164,44 +164,29 @@
             '</button>'
         );
     }
-
-    function showToast(message) {
-        var toast = $('<div class="toast">' + message + '</div>');
-        $('body').append(toast);
-        setTimeout(function() {
-            toast.addClass('show');
-            setTimeout(function() {
-                toast.removeClass('show');
-                setTimeout(function() {
-                    toast.remove();
-                }, 300);
-            }, 2000);
-        }, 100);
-    }
 </script>
 
 <style>
-    .toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        background: #4CAF50;
-        color: white;
-        border-radius: 4px;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        z-index: 1000;
+    .summary-card {
+        transition: transform 0.2s ease;
     }
-
-    .toast.show {
-        opacity: 1;
+    
+    .summary-card:hover {
+        transform: translateY(-5px);
     }
-
+    
+    .food-item {
+        transition: background-color 0.2s ease;
+    }
+    
+    .food-item:hover {
+        background-color: #f3f4f6;
+    }
+    
     .quick-add-btn {
         transition: all 0.2s ease;
     }
-
+    
     .quick-add-btn.pressed {
         transform: scale(0.95);
         opacity: 0.9;

@@ -51,7 +51,70 @@
                     menuButton.find('svg:last-child').addClass('hidden');
                 }
             });
+
+            // Process flash messages and display them as toasts
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        showToast('{{ message }}', '{{ category }}');
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            // Set up AJAX to handle toast responses
+            $(document).ajaxSuccess(function(event, xhr, settings) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.toast) {
+                        showToast(response.toast.message, response.toast.category);
+                        
+                        // Handle redirect if provided
+                        if (response.redirect) {
+                            setTimeout(function() {
+                                window.location.href = response.redirect;
+                            }, 1000); // Delay redirect to allow toast to be seen
+                        }
+                    }
+                } catch (e) {
+                    // Not a JSON response or doesn't have toast property
+                }
+            });
         });
+
+        // Global toast function
+        function showToast(message, type = 'success') {
+            // Create toast element
+            const toast = document.createElement('div');
+            
+            // Set toast classes based on type
+            let bgColor = 'bg-green-500';
+            if (type === 'error') {
+                bgColor = 'bg-red-500';
+            } else if (type === 'warning') {
+                bgColor = 'bg-yellow-500';
+            } else if (type === 'info') {
+                bgColor = 'bg-blue-500';
+            }
+            
+            toast.className = `toast fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-md shadow-lg z-50 opacity-0 transition-opacity duration-300`;
+            toast.textContent = message;
+            
+            // Add toast to container
+            document.getElementById('toast-container').appendChild(toast);
+            
+            // Show toast
+            setTimeout(() => {
+                toast.classList.add('opacity-100');
+                
+                // Hide and remove toast after delay
+                setTimeout(() => {
+                    toast.classList.remove('opacity-100');
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 300);
+                }, 3000);
+            }, 100);
+        }
     </script>
     <style>
         /* Add any custom styles here */
@@ -80,19 +143,10 @@
     {% block navbar %}{% endblock %}
 
     <main class="container mx-auto mt-8 px-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="mb-6">
-                    {% for category, message in messages %}
-                        <div class="mb-4 p-4 rounded {% if category == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
 </body>
 </html>
