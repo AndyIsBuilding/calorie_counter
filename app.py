@@ -882,16 +882,47 @@ def update_settings():
 def history():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # Get data for the last 30 days instead of just 7 days
-    thirty_days_ago = (get_local_date() - timedelta(days=30)).isoformat()
+    # Get data for the last 90 days (3 months) instead of just 30 days
+    ninety_days_ago = (get_local_date() - timedelta(days=90)).isoformat()
     c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal, protein_goal 
                  FROM daily_summary 
                  WHERE date >= ? AND user_id = ? 
-                 ORDER BY date DESC""", (thirty_days_ago, current_user.id))
-    weekly_summaries = c.fetchall()
-
+                 ORDER BY date ASC""", (ninety_days_ago, current_user.id))
+    summaries = c.fetchall()
+    
+    # Get weight logs for the same period
+    c.execute("""SELECT date, weight FROM weight_logs 
+                 WHERE date >= ? AND user_id = ? 
+                 ORDER BY date ASC""", (ninety_days_ago, current_user.id))
+    weight_logs = c.fetchall()
+    
+    # Format data for charts
+    dates = [entry[0] for entry in summaries]
+    calories = [entry[1] for entry in summaries]
+    proteins = [entry[2] for entry in summaries]
+    calorie_goals = [entry[4] for entry in summaries]
+    protein_goals = [entry[5] for entry in summaries]
+    
+    # Format weight data
+    weight_dates = [entry[0] for entry in weight_logs]
+    weights = [entry[1] for entry in weight_logs]
+    
+    # Convert weight to user's preferred unit
+    if current_user.weight_unit == 1:  # If user prefers lbs
+        weights = [round(w * 2.20462, 1) for w in weights]  # Convert kg to lbs
+    
     conn.close()
-    return render_template('history.html', weekly_summaries=weekly_summaries)
+    return render_template('history.html', 
+                          weekly_summaries=summaries,
+                          chart_dates=dates,
+                          chart_calories=calories,
+                          chart_proteins=proteins,
+                          chart_calorie_goals=calorie_goals,
+                          chart_protein_goals=protein_goals,
+                          weight_dates=weight_dates,
+                          weights=weights,
+                          weight_goal=current_user.weight_goal,
+                          weight_unit="lbs" if current_user.weight_unit == 1 else "kg")
 
 if __name__ == '__main__':
     init_db()
