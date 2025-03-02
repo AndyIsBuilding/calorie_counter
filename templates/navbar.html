@@ -39,6 +39,7 @@
 
             <!-- Navigation Links - Desktop -->
             <div class="hidden md:flex space-x-4">
+                <a href="{{ url_for('history') }}" class="nav-link">History</a>
                 <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
                 <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
             </div>
@@ -87,6 +88,7 @@
         <!-- Mobile menu dropdown -->
         <div id="mobile-menu" class="hidden md:hidden">
             <div class="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
+                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">History</a>
                 <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Settings</a>
                 <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Logout</a>
             </div>
@@ -103,6 +105,8 @@
             <div class="hidden md:flex space-x-4">
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('history') }}" class="nav-link">History</a>
+                <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
                 <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
                 {% else %}
                 <a href="#features" class="nav-link">Features</a>
@@ -130,6 +134,8 @@
             <div class="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Dashboard</a>
+                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">History</a>
+                <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Settings</a>
                 <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Logout</a>
                 {% else %}
                 <a href="#features" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Features</a>

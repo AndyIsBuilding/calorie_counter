@@ -10,72 +10,313 @@
 
 {% block content %}
 <div class="pt-32 md:pt-20">
-    <div class="container mx-auto p-4">
+    <div class="container mx-auto p-4 max-w-3xl">
+        <!-- Today's Progress Section -->
+        {% if today_calories is defined and today_protein is defined %}
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-bold mb-4">Today's Progress</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Calories Progress -->
+                <div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-700 font-medium">Calories</span>
+                        <span class="text-gray-600">{{ today_calories }} / {{ calorie_goal }}</span>
+                    </div>
+                    <div class="progress-bar">
+                        {% set calorie_percentage = ((today_calories/calorie_goal * 100)|round) if calorie_goal > 0 else 0 %}
+                        {% if calorie_percentage > 100 %}
+                            <div class="progress-fill bg-red-500" style="width: 100%"></div>
+                        {% else %}
+                            <div class="progress-fill bg-blue-500" style="width: {{ calorie_percentage }}%"></div> 
+                        {% endif %}
+                    </div>
+                    <div class="text-right text-xs text-gray-500 mt-1">
+                        {% if today_calories > calorie_goal %}
+                            <span class="text-red-500">{{ calorie_percentage }}%</span>
+                        {% else %}
+                            <span>{{ calorie_percentage }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Protein Progress -->
+                <div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-700 font-medium">Protein</span>
+                        <span class="text-gray-600">{{ today_protein }}g / {{ protein_goal }}g</span>
+                    </div>
+                    <div class="progress-bar">
+                        {% set protein_percentage = ((today_protein/protein_goal * 100)|round) if protein_goal > 0 else 0 %}
+                        {% if protein_percentage > 100 %}
+                            <div class="progress-fill bg-green-500" style="width: 100%"></div>
+                        {% else %}
+                            <div class="progress-fill bg-green-500" style="width: {{ protein_percentage }}%"></div>
+                        {% endif %}
+                    </div>
+                    <div class="text-right text-xs text-gray-500 mt-1">
+                        {% if today_protein > protein_goal %}
+                            <span class="text-green-600 font-medium">{{ protein_percentage }}%</span>
+                        {% else %}
+                            <span>{{ protein_percentage }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- User Settings Section -->
         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 class="text-2xl font-bold mb-6">User Settings</h2>
-            <div class="space-y-6">
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
-                    <p class="text-gray-600">{{ current_user.username }}</p>
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="calorie-goal">Daily Calorie Goal</label>
-                    <input type="number" id="calorie-goal" name="calorie_goal" value="{{ calorie_goal }}" 
-                           class="w-full px-4 py-2 border rounded-md" disabled>
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="protein-goal">Daily Protein Goal (g)</label>
-                    <input type="number" id="protein-goal" name="protein_goal" value="{{ protein_goal }}" 
-                           class="w-full px-4 py-2 border rounded-md" disabled>
-                </div>
-                <p class="text-sm text-gray-500 italic">* Settings editing will be enabled in a future update</p>
-            </div>
-        </div>
-
-        <!-- Historical Data Section -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <h2 class="text-2xl font-bold mb-4 sm:mb-0">Historical Data</h2>
-                <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <a href="{{ url_for('export_csv') }}" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 text-center">Export to CSV</a>
-                    <a href="{{ url_for('edit_history') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 text-center">Edit Previous Days</a>
-                </div>
-            </div>
+            <h2 class="text-2xl font-bold mb-6">User Profile</h2>
             
-            {% if weekly_summaries %}
-            <div class="summary-table-container">
-                <table class="summary-table">
-                    <thead>
-                        <tr class="bg-gray-200">
-                            <th class="date-column">Date</th>
-                            <th>Total Calories</th>
-                            <th>Total Protein</th>
-                            <th class="summary-column">Summary</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for date, calories, protein, summary, calorie_goal, protein_goal in weekly_summaries %}
-                        <tr class="border-t">
-                            <td class="date-column">{{ date }}</td>
-                            <td>{{ calories }}</td>
-                            <td>{{ protein }}g</td>
-                            <td class="summary-column">{{ summary }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <p class="text-gray-600">No historical data available.</p>
-            {% endif %}
+            <form id="settings-form" action="{{ url_for('update_settings') }}" method="POST" class="space-y-6">
+                <!-- User Information -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Account Information</h3>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                        <p class="text-gray-600">{{ current_user.username }}</p>
+                    </div>
+                    <!-- We could add more user profile fields here in the future -->
+                </div>
+                
+                <!-- Nutrition Goals -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Nutrition Goals</h3>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="calorie-goal">
+                            Daily Calorie Goal
+                        </label>
+                        <div class="flex items-center">
+                            <input type="number" id="calorie-goal" name="calorie_goal" value="{{ calorie_goal }}" 
+                                class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span class="ml-2 text-gray-600">calories</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Recommended: 1800-2500 calories for most adults</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="protein-goal">
+                            Daily Protein Goal
+                        </label>
+                        <div class="flex items-center">
+                            <input type="number" id="protein-goal" name="protein_goal" value="{{ protein_goal }}" 
+                                class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span class="ml-2 text-gray-600">grams</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Recommended: 0.8g per kg of body weight</p>
+                    </div>
+                </div>
+                
+                <!-- Weight Tracking -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Weight Tracking</h3>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="current-weight">
+                            Current Weight
+                        </label>
+                        <div class="flex items-center">
+                            <input type="number" step="0.1" id="current-weight" name="current_weight" 
+                                placeholder="Enter your current weight" 
+                                class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span class="ml-2 text-gray-600">kg</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">This will be logged as your weight for today</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="weight-goal">
+                            Weight Goal
+                        </label>
+                        <div class="flex items-center">
+                            <input type="number" step="0.1" id="weight-goal" name="weight_goal" 
+                                value="{{ current_user.weight_goal or '' }}" 
+                                placeholder="Enter your target weight" 
+                                class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span class="ml-2 text-gray-600">kg</span>
+                        </div>
+                    </div>
+                    
+                    {% if weight_logs %}
+                    <div class="mt-6">
+                        <h4 class="font-medium text-gray-700 mb-2">Recent Weight Logs</h4>
+                        <div class="bg-gray-50 p-3 rounded-md max-h-40 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-gray-500">
+                                        <th class="pb-2">Date</th>
+                                        <th class="pb-2">Weight (kg)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for date, weight in weight_logs %}
+                                    <tr class="border-t border-gray-200">
+                                        <td class="py-2">{{ date }}</td>
+                                        <td class="py-2">{{ weight }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Preferences (for future expansion) -->
+                <div class="pb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Preferences</h3>
+                    
+                    <div class="flex items-center mb-4">
+                        <input type="checkbox" id="email-notifications" name="email_notifications" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="email-notifications" class="ml-2 block text-sm text-gray-700">
+                            Email notifications (coming soon)
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="dark-mode" name="dark_mode" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="dark-mode" class="ml-2 block text-sm text-gray-700">
+                            Dark mode (coming soon)
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Save Button -->
+                <div class="flex justify-end">
+                    <button type="button" id="save-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
         </div>
 
-        <!-- Trends Section -->
+        <!-- Link to History Page -->
         <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-bold mb-6">Trends</h2>
-            <p class="text-gray-600 italic">Charts and trends analysis coming soon...</p>
+            <h2 class="text-2xl font-bold mb-6">Historical Data</h2>
+            <p class="mb-4">View your historical data and trends on the dedicated history page.</p>
+            <a href="{{ url_for('history') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 inline-block">View History</a>
         </div>
     </div>
 </div>
+
+<!-- Confirmation Modal -->
+<div id="confirmation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <h3 class="text-lg font-bold mb-4">Confirm Changes</h3>
+        <p class="mb-6">Are you sure you want to update your nutrition goals?</p>
+        <div class="flex justify-end space-x-4">
+            <button id="cancel-button" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">
+                Cancel
+            </button>
+            <button id="confirm-button" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Success Message Toast -->
+{% if success_message %}
+<div id="success-toast" class="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg">
+    {{ success_message }}
+</div>
+<script>
+    setTimeout(function() {
+        document.getElementById('success-toast').style.display = 'none';
+    }, 3000);
+</script>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('settings-form');
+        const saveButton = document.getElementById('save-button');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const cancelButton = document.getElementById('cancel-button');
+        const confirmButton = document.getElementById('confirm-button');
+        const calorieInput = document.getElementById('calorie-goal');
+        const proteinInput = document.getElementById('protein-goal');
+        const originalCalorieValue = calorieInput.value;
+        const originalProteinValue = proteinInput.value;
+        
+        // Function to validate inputs
+        function validateInputs() {
+            let isValid = true;
+            
+            // Clear previous error messages
+            document.querySelectorAll('.error-message').forEach(el => el.remove());
+            calorieInput.classList.remove('input-error');
+            proteinInput.classList.remove('input-error');
+            
+            // Validate calorie input
+            if (!calorieInput.value || parseInt(calorieInput.value) <= 0) {
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'error-message';
+                errorMsg.textContent = 'Please enter a positive number';
+                calorieInput.parentNode.parentNode.appendChild(errorMsg);
+                calorieInput.classList.add('input-error');
+                isValid = false;
+            }
+            
+            // Validate protein input
+            if (!proteinInput.value || parseInt(proteinInput.value) <= 0) {
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'error-message';
+                errorMsg.textContent = 'Please enter a positive number';
+                proteinInput.parentNode.parentNode.appendChild(errorMsg);
+                proteinInput.classList.add('input-error');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        // Check if form values have changed
+        function checkFormChanged() {
+            const calorieChanged = calorieInput.value !== originalCalorieValue;
+            const proteinChanged = proteinInput.value !== originalProteinValue;
+            
+            if (calorieChanged || proteinChanged) {
+                form.classList.add('settings-form-changed');
+            } else {
+                form.classList.remove('settings-form-changed');
+            }
+        }
+        
+        // Show confirmation modal
+        saveButton.addEventListener('click', function() {
+            if (validateInputs()) {
+                // Only show confirmation if values have changed
+                if (calorieInput.value !== originalCalorieValue || proteinInput.value !== originalProteinValue) {
+                    confirmationModal.classList.remove('hidden');
+                } else {
+                    // If no changes, just inform the user
+                    alert('No changes to save.');
+                }
+            }
+        });
+        
+        // Cancel button closes the modal
+        cancelButton.addEventListener('click', function() {
+            confirmationModal.classList.add('hidden');
+        });
+        
+        // Confirm button submits the form
+        confirmButton.addEventListener('click', function() {
+            form.submit();
+        });
+        
+        // Add input event listeners
+        calorieInput.addEventListener('input', function() {
+            checkFormChanged();
+        });
+        
+        proteinInput.addEventListener('input', function() {
+            checkFormChanged();
+        });
+    });
+</script>
 {% endblock %}

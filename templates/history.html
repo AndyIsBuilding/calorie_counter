@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+
+{% block extra_head %} 
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% endblock extra_head %} 
+
+{% block navbar %}
+{% include 'navbar.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="pt-32 md:pt-20">
+    <div class="container mx-auto p-4">
+        <!-- Historical Data Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                <h2 class="text-2xl font-bold mb-4 sm:mb-0">Historical Data</h2>
+                <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <a href="{{ url_for('export_csv') }}" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 text-center">Export to CSV</a>
+                    <a href="{{ url_for('edit_history') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 text-center">Edit Previous Days</a>
+                </div>
+            </div>
+            
+            {% if weekly_summaries %}
+            <div class="summary-table-container">
+                <table class="summary-table">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="date-column">Date</th>
+                            <th>Total Calories</th>
+                            <th>Total Protein</th>
+                            <th class="summary-column">Summary</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for date, calories, protein, summary, calorie_goal, protein_goal in weekly_summaries %}
+                        <tr class="border-t">
+                            <td class="date-column">{{ date }}</td>
+                            <td>{{ calories }}</td>
+                            <td>{{ protein }}g</td>
+                            <td class="summary-column">{{ summary }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-600">No historical data available.</p>
+            {% endif %}
+        </div>
+
+        <!-- Trends Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold mb-6">Trends</h2>
+            <p class="text-gray-600 italic">Charts and trends analysis coming soon...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

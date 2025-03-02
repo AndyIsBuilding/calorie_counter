@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, get_flashed_messages
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
@@ -45,11 +45,79 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 class User(UserMixin):
-    def __init__(self, id, username, calorie_goal=2000, protein_goal=100):
+    def __init__(self, id, username, calorie_goal=DEFAULT_CALORIE_GOAL, protein_goal=DEFAULT_PROTEIN_GOAL, weight_goal=None):
         self.id = id
         self.username = username
         self.calorie_goal = calorie_goal
         self.protein_goal = protein_goal
+        self.weight_goal = weight_goal
+    
+    def update_goals(self, calorie_goal, protein_goal, weight_goal=None):
+        """Update the user's calorie, protein, and weight goals"""
+        self.calorie_goal = calorie_goal
+        self.protein_goal = protein_goal
+        
+        # Only update weight_goal if it's provided
+        if weight_goal is not None:
+            self.weight_goal = weight_goal
+            
+            # Update the database with all goals
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("UPDATE users SET calorie_goal = ?, protein_goal = ?, weight_goal = ? WHERE id = ?", 
+                    (calorie_goal, protein_goal, weight_goal, self.id))
+            conn.commit()
+            conn.close()
+        else:
+            # Update just calorie and protein goals
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("UPDATE users SET calorie_goal = ?, protein_goal = ? WHERE id = ?", 
+                    (calorie_goal, protein_goal, self.id))
+            conn.commit()
+            conn.close()
+        
+        return True
+    
+    def log_weight(self, weight, date=None):
+        """Log the user's weight for a specific date"""
+        if date is None:
+            date = get_local_date().isoformat()
+            
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Check if there's already a weight log for this date
+        c.execute("SELECT id FROM weight_logs WHERE date = ? AND user_id = ?", (date, self.id))
+        existing_log = c.fetchone()
+        
+        if existing_log:
+            # Update existing log
+            c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (weight, existing_log[0]))
+        else:
+            # Insert new log
+            c.execute("INSERT INTO weight_logs (date, weight, user_id) VALUES (?, ?, ?)", 
+                     (date, weight, self.id))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
+    
+    def get_weight_logs(self, limit=30):
+        """Get the user's weight logs, limited to the most recent entries"""
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        c.execute("""SELECT date, weight FROM weight_logs 
+                     WHERE user_id = ? 
+                     ORDER BY date DESC LIMIT ?""", 
+                  (self.id, limit))
+        logs = c.fetchall()
+        
+        conn.close()
+        
+        return logs
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -59,14 +127,16 @@ def load_user(user_id):
     user = c.fetchone()
     conn.close()
     if user:
-        return User(user[0], user[1], user[3], user[4])
+        # Check if weight_goal column exists in the result
+        weight_goal = user[5] if len(user) > 5 else None
+        return User(user[0], user[1], user[3], user[4], weight_goal)
     return None
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100)''')
+                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100, weight_goal REAL DEFAULT NULL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS foods
                  (id INTEGER PRIMARY KEY, name TEXT, calories INTEGER, protein INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS daily_log
@@ -76,6 +146,18 @@ def init_db():
                  (id INTEGER PRIMARY KEY, date TEXT, total_calories INTEGER, total_protein INTEGER, summary TEXT, user_id INTEGER,
                   calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100,
                   FOREIGN KEY(user_id) REFERENCES users(id))""")
+    
+    # Add weight_logs table if it doesn't exist
+    c.execute('''CREATE TABLE IF NOT EXISTS weight_logs
+                 (id INTEGER PRIMARY KEY, date TEXT, weight REAL, user_id INTEGER,
+                  FOREIGN KEY(user_id) REFERENCES users(id))''')
+    
+    # Add weight_goal column to users table if it doesn't exist
+    try:
+        c.execute("SELECT weight_goal FROM users LIMIT 1")
+    except sqlite3.OperationalError:
+        c.execute("ALTER TABLE users ADD COLUMN weight_goal REAL DEFAULT NULL")
+    
     conn.commit()
     conn.close()
 
@@ -456,7 +538,7 @@ def login():
         conn.close()
         
         if user and check_password_hash(user[2], password):
-            user_obj = User(user[0], user[1], user[3], user[4])
+            user_obj = User(user[0], user[1], user[3], user[4], user[5])
             login_user(user_obj)
             return redirect(url_for('dashboard'))
         else:
@@ -496,8 +578,8 @@ def register():
         conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)", 
-                     (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL))
+            c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal, weight_goal) VALUES (?, ?, ?, ?, ?)", 
+                     (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL, None))
             conn.commit()
             conn.close()
             flash('Registration successful. Please log in.', 'success')
@@ -668,18 +750,107 @@ def get_testimonials():
 
 @app.route('/settings') 
 def settings(): 
+    # Get success message from flash if it exists
+    success_message = None
+    flashed_messages = get_flashed_messages(with_categories=True)
+    for category, message in flashed_messages:
+        if category == 'success':
+            success_message = message
+        else:
+            flash(message, category)  # Re-flash non-success messages
+    
+    # Get today's calorie and protein data
+    today_calories = 0
+    today_protein = 0
+    
+    if current_user.is_authenticated:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        today = get_local_date().isoformat()
+        
+        # First check if there's a daily summary for today
+        c.execute("""SELECT total_calories, total_protein 
+                     FROM daily_summary 
+                     WHERE date = ? AND user_id = ?""", 
+                  (today, current_user.id))
+        summary = c.fetchone()
+        
+        if summary:
+            today_calories, today_protein = summary
+        else:
+            # If no summary, calculate from daily log
+            c.execute("""SELECT SUM(calories), SUM(protein) 
+                         FROM daily_log 
+                         WHERE date = ? AND user_id = ?""", 
+                      (today, current_user.id))
+            log_totals = c.fetchone()
+            
+            if log_totals[0] is not None:
+                today_calories, today_protein = log_totals
+        
+        # Get weight logs
+        weight_logs = current_user.get_weight_logs(limit=10)
+        
+        conn.close()
+    else:
+        weight_logs = []
+    
+    # No need to fetch weekly summaries anymore as they're now in the history page
+    return render_template('settings.html', 
+                          calorie_goal=current_user.calorie_goal, 
+                          protein_goal=current_user.protein_goal,
+                          today_calories=today_calories,
+                          today_protein=today_protein,
+                          weight_logs=weight_logs,
+                          success_message=success_message)
+
+@app.route('/update_settings', methods=['POST'])
+@login_required
+def update_settings():
+    # Get the new calorie and protein goals from the form
+    calorie_goal = request.form.get('calorie_goal', type=int)
+    protein_goal = request.form.get('protein_goal', type=int)
+    weight_goal = request.form.get('weight_goal', type=float)
+    current_weight = request.form.get('current_weight', type=float)
+    
+    # Validate the input
+    if calorie_goal is None or protein_goal is None:
+        flash('Invalid input. Please enter valid numbers for calorie and protein goals.', 'error')
+        return redirect(url_for('settings'))
+    
+    if calorie_goal <= 0 or protein_goal <= 0:
+        flash('Calorie and protein goals must be positive numbers.', 'error')
+        return redirect(url_for('settings'))
+    
+    # Update the user's goals using the User class method
+    current_user.update_goals(calorie_goal, protein_goal, weight_goal)
+    
+    # Log the current weight if provided
+    if current_weight is not None and current_weight > 0:
+        current_user.log_weight(current_weight)
+        flash_message = 'Settings updated and weight logged successfully!'
+    else:
+        flash_message = 'Settings updated successfully!'
+    
+    # Redirect back to the settings page with a success message
+    flash(flash_message, 'success')
+    return redirect(url_for('settings'))
+
+@app.route('/history')
+@login_required
+def history():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    seven_days_ago = (get_local_date() - timedelta(days=7)).isoformat()
+    # Get data for the last 30 days instead of just 7 days
+    thirty_days_ago = (get_local_date() - timedelta(days=30)).isoformat()
     c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal, protein_goal 
                  FROM daily_summary 
                  WHERE date >= ? AND user_id = ? 
-                 ORDER BY date DESC""", (seven_days_ago, current_user.id))
+                 ORDER BY date DESC""", (thirty_days_ago, current_user.id))
     weekly_summaries = c.fetchall()
 
     conn.close()
-    return render_template('settings.html', weekly_summaries=weekly_summaries, calorie_goal=current_user.calorie_goal, protein_goal=current_user.protein_goal)
-
+    return render_template('history.html', weekly_summaries=weekly_summaries)
 
 if __name__ == '__main__':
     init_db()
