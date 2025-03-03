@@ -1,5 +1,5 @@
 {
-    "name": "Calorie Counter",
+    "name": "HealthVibe",
     "short_name": "CalorieCounter",
     "start_url": "/",
     "display": "standalone",

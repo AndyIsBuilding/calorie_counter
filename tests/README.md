@@ -1,6 +1,6 @@
-# Testing the Calorie Counter Application
+# Testing the HealthVibe Application
 
-This directory contains tests for the Calorie Counter application using pytest.
+This directory contains tests for the HealthVibe application using pytest.
 
 ## Running Tests
 

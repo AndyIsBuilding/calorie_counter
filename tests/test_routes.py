@@ -5,7 +5,7 @@ def test_index_page(client):
     """Test that the index page loads correctly."""
     response = client.get('/')
     assert response.status_code == 200
-    assert b'Calorie Counter' in response.data
+    assert b'HealthVibe' in response.data
 
 def test_login_page(client):
     """Test that the login page loads correctly."""

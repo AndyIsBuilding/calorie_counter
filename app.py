@@ -866,12 +866,12 @@ def food_recommendation(total_calories, total_protein):
 def get_testimonials():
     testimonials = [
         {
-            "quote": "Calorie Counter has made it so easy for me to keep on top of my nutrition. I've never felt better!",
+            "quote": "HealthVibe has made it so easy for me to keep on top of my nutrition. I've never felt better!",
             "author": "Sarah L.",
             "role": "Fitness Enthusiast",
         },
         {
-            "quote": "As a nutritionist, I recommend Calorie Counter to all my clients. It's user-friendly and accurate.",
+            "quote": "As a nutritionist, I recommend HealthVibe to all my clients. It's user-friendly and accurate.",
             "author": "Dr. Michael Chen",
             "role": "Registered Dietitian",
         },
