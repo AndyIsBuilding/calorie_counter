@@ -14,12 +14,6 @@
     {% block extra_head %}{% endblock %}
 
     <script>
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', function() {
-            navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
-          });
-        }
-
         // Mobile menu functionality
         $(document).ready(function() {
             // Mobile menu toggle
@@ -138,6 +132,7 @@
             @apply outline-none ring-2 ring-blue-500;
         }
     </style>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     {% block navbar %}{% endblock %}
@@ -148,5 +143,20 @@
 
     <!-- Toast container -->
     <div id="toast-container"></div>
+
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register("{{ url_for('static', filename='js/service-worker.js') }}")
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>

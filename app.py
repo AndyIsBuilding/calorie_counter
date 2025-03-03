@@ -1184,6 +1184,15 @@ def migrate_daily_summary_table():
     finally:
         conn.close()
 
+@app.after_request
+def add_header(response):
+    # Add headers to prevent caching of dynamic content
+    if request.path.startswith('/dashboard') or request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)

@@ -73,6 +73,8 @@
             var $button = $(this);
             var foodId = $button.data('food-id');
             
+            console.log('Quick Add button clicked for food ID:', foodId);
+            
             // Add pressed effect
             $button.addClass('pressed');
             
@@ -81,10 +83,18 @@
                 type: 'POST',
                 data: { food_id: foodId },
                 success: function(response) {
+                    console.log('Quick Add AJAX Response:', response);
                     if (response.success) {
                         if (!summaryExists) {
+                            console.log('Updating food log with new entry:', response.log_entry);
                             updateTodaysLog(response.log_entry);
-                            updateTotals(response.totals);
+                            // Ensure we're using the server's calculated totals
+                            if (response.totals) {
+                                console.log('Updating totals with server data:', response.totals);
+                                updateTotals(response.totals);
+                            } else {
+                                console.warn('No totals data received from server');
+                            }
                             // Show success message for normal case
                             showToast('✅ Food added!');
                         } else {
@@ -92,6 +102,9 @@
                             showToast('✅ Food added! Refresh to see updated totals or save a new summary.');
                         }
                     }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Quick Add AJAX Error:', {xhr, status, error});
                 },
                 complete: function() {
                     // Remove pressed effect after a short delay
@@ -108,28 +121,42 @@
         $('#addFoodForm').submit(function(e) {
             if ($(this).attr('action') === "{{ url_for('quick_add_food') }}") {
                 e.preventDefault();
+                console.log('Quick Add form submitted');
                 $.ajax({
                     url: $(this).attr('action'),
                     type: 'POST',
                     data: $(this).serialize(),
                     success: function(response) {
+                        console.log('Quick Add Form AJAX Response:', response);
                         if (response.success) {
                             addQuickAddButton(response.food);
                             $('#addFoodForm')[0].reset();
                         }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Quick Add Form AJAX Error:', {xhr, status, error});
                     }
                 });
             } else if ($(this).attr('action') === "{{ url_for('log_food') }}") {
                 e.preventDefault();
+                console.log('Log Food form submitted');
                 $.ajax({
                     url: $(this).attr('action'),
                     type: 'POST',
                     data: $(this).serialize(),
                     success: function(response) {
+                        console.log('Log Food AJAX Response:', response);
                         if (response.success) {
                             if (!summaryExists) {
+                                console.log('Updating food log with new entry:', response.log_entry);
                                 updateTodaysLog(response.log_entry);
-                                updateTotals(response.totals);
+                                // Ensure we're using the server's calculated totals
+                                if (response.totals) {
+                                    console.log('Updating totals with server data:', response.totals);
+                                    updateTotals(response.totals);
+                                } else {
+                                    console.warn('No totals data received from server');
+                                }
                                 // Show success message for normal case
                                 showToast('✅ Food added!');
                             } else {
@@ -138,6 +165,9 @@
                             }
                             $('#addFoodForm')[0].reset();
                         }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Log Food AJAX Error:', {xhr, status, error});
                     }
                 });
             }
@@ -203,6 +233,7 @@
     });
 
     function updateTodaysLog(logEntry) {
+        console.log('Adding new food to log:', logEntry);
         $('#daily-log').append(
             '<tr data-log-id="' + logEntry.id + '">' +
                 '<td class="p-2">' + logEntry.food_name + '</td>' +
@@ -216,28 +247,54 @@
     }
 
     function updateTotals(totals) {
+        console.log('Current DOM state before update:', {
+            headerCalories: $('#header-calories').text(),
+            headerProtein: $('#header-protein').text(),
+            totalCalories: $('#total-calories').text(),
+            totalProtein: $('#total-protein').text()
+        });
+        
+        console.log('Updating totals with:', totals);
+        
+        // Get current totals from DOM
+        const currentCalories = parseInt($('#total-calories').text()) || 0;
+        const currentProtein = parseInt($('#total-protein').text()) || 0;
+        
+        // Calculate new totals by adding new values to current totals
+        const newCalories = currentCalories + totals.calories;
+        const newProtein = currentProtein + totals.protein;
+        
+        console.log('Calculated new totals:', {
+            currentCalories,
+            currentProtein,
+            newCalories,
+            newProtein
+        });
+        
         // Update the original totals at bottom of page
-        $('#total-calories').text(totals.calories);
-        $('#total-protein').text(totals.protein + 'g');
+        $('#total-calories').text(newCalories);
+        $('#total-protein').text(newProtein + 'g');
         
         // Update desktop header totals
-        $('#header-calories').text(totals.calories);
-        $('#header-protein').text(totals.protein);
+        $('#header-calories').text(newCalories);
+        $('#header-protein').text(newProtein);
         
         // Update mobile header totals
-        $('#mobile-header-calories').text(totals.calories);
-        $('#mobile-header-protein').text(totals.protein);
+        $('#mobile-header-calories').text(newCalories);
+        $('#mobile-header-protein').text(newProtein);
         
         // Calculate percentages
         const calorieGoal = parseInt($('#calorie-goal').text());
         const proteinGoal = parseInt($('#protein-goal').text());
         
-        const caloriePercentage = Math.min((totals.calories / calorieGoal) * 100, 100);
-        const proteinPercentage = Math.min((totals.protein / proteinGoal) * 100, 100);
+        console.log('Goals:', { calorieGoal, proteinGoal });
+        
+        const caloriePercentage = Math.min((newCalories / calorieGoal) * 100, 100);
+        const proteinPercentage = Math.min((newProtein / proteinGoal) * 100, 100);
         
         // Update percentage indicators
-        const caloriePercentageText = Math.round(totals.calories / calorieGoal * 100) + '%';
-        const proteinPercentageText = Math.round(totals.protein / proteinGoal * 100) + '%';
+        const caloriePercentageText = Math.round(newCalories / calorieGoal * 100) + '%';
+        const proteinPercentageText = Math.round(newProtein / proteinGoal * 100) + '%';
         
         // Update desktop percentage indicators
         $('#header-calories-percentage').text(caloriePercentageText);
@@ -263,6 +320,13 @@
         } else {
             $('#protein-progress, #mobile-protein-progress').removeClass('yellow-500').addClass('bg-green-500');
         }
+
+        console.log('DOM state after update:', {
+            headerCalories: $('#header-calories').text(),
+            headerProtein: $('#header-protein').text(),
+            totalCalories: $('#total-calories').text(),
+            totalProtein: $('#total-protein').text()
+        });
     }
 
     function addQuickAddButton(food) {
@@ -448,7 +512,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <div class="mt-4">
+            <div id="totals" class="mt-4">
                 <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
                 <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
             </div>
