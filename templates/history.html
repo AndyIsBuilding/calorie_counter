@@ -25,7 +25,8 @@
                         <option value="30" selected>Last 30 Days</option>
                         <option value="60">Last 60 Days</option>
                         <option value="90">Last 90 Days (3 Months)</option>
-                        <option value="all">All Available Data</option>
+                        <option value="180">Last 180 Days (6 Months)</option>
+                        <option value="365">Last 365 Days (1 Year)</option>
                     </select>
                 </div>
             </div>
@@ -72,7 +73,7 @@
                         {% if weight_goal %}
                         <div>
                             <p class="text-sm text-gray-600">Goal</p>
-                            <p class="text-2xl font-bold">{{ weight_goal }} {{ weight_unit }}</p>
+                            <p class="text-2xl font-bold">{{ weight_goal|round(1) }} {{ weight_unit }}</p>
                         </div>
                         {% endif %}
                     </div>
@@ -116,38 +117,56 @@
                 const allWeightDates = {{ weight_dates|tojson }};
                 const allWeights = {{ weights|tojson }};
                 
+                // Store the weight unit for use in labels
+                const weightUnit = "{{ weight_unit }}";
+                
+                // Debug logging
+                console.log('Chart data loaded:', {
+                    dates: allDates,
+                    calories: allCalories,
+                    proteins: allProteins,
+                    weightDates: allWeightDates,
+                    weights: allWeights,
+                    weightUnit: weightUnit
+                });
+                
+                // Format number with commas for thousands
+                function formatNumberWithCommas(number) {
+                    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                }
+                
                 // Calculate summary statistics
                 function updateSummaryStats(data) {
                     // Calculate average calories
                     const avgCalories = data.calories.length > 0 
                         ? Math.round(data.calories.reduce((a, b) => a + b, 0) / data.calories.length) 
                         : 0;
-                    document.getElementById('avgCalories').textContent = avgCalories;
+                    document.getElementById('avgCalories').textContent = formatNumberWithCommas(avgCalories);
                     
                     // Set calorie goal (use the most recent one)
                     const calorieGoal = data.calorieGoals.length > 0 
                         ? data.calorieGoals[data.calorieGoals.length - 1] 
                         : 0;
-                    document.getElementById('calorieGoal').textContent = calorieGoal;
+                    document.getElementById('calorieGoal').textContent = formatNumberWithCommas(calorieGoal);
                     
                     // Calculate average protein
                     const avgProtein = data.proteins.length > 0 
                         ? Math.round(data.proteins.reduce((a, b) => a + b, 0) / data.proteins.length) 
                         : 0;
-                    document.getElementById('avgProtein').textContent = avgProtein + 'g';
+                    document.getElementById('avgProtein').textContent = formatNumberWithCommas(avgProtein) + 'g';
                     
                     // Set protein goal (use the most recent one)
                     const proteinGoal = data.proteinGoals.length > 0 
                         ? data.proteinGoals[data.proteinGoals.length - 1] 
                         : 0;
-                    document.getElementById('proteinGoal').textContent = proteinGoal + 'g';
+                    document.getElementById('proteinGoal').textContent = formatNumberWithCommas(proteinGoal) + 'g';
                     
                     // Set latest weight
                     {% if weights|length > 0 %}
                     const latestWeight = data.weights.length > 0 
                         ? data.weights[data.weights.length - 1] 
                         : 0;
-                    document.getElementById('latestWeight').textContent = latestWeight + ' {{ weight_unit }}';
+                    document.getElementById('latestWeight').textContent = latestWeight.toFixed(1) + ` ${weightUnit}`;
                     {% endif %}
                 }
                 
@@ -161,7 +180,22 @@
                 
                 // Filter data based on selected time range
                 function filterDataByDays(days) {
+                    // Check if we have any data at all
+                    if (allDates.length === 0) {
+                        console.log('No data available for filtering');
+                        return {
+                            dates: [],
+                            calories: [],
+                            calorieGoals: [],
+                            proteins: [],
+                            proteinGoals: [],
+                            weightDates: [],
+                            weights: []
+                        };
+                    }
+                    
                     if (days === 'all') {
+                        console.log('Returning all available data');
                         return {
                             dates: allDates,
                             calories: allCalories,
@@ -177,6 +211,7 @@
                     const cutoffDate = new Date();
                     cutoffDate.setDate(cutoffDate.getDate() - daysNum);
                     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+                    console.log(`Filtering data from ${cutoffDateStr} to present`);
                     
                     // Filter nutrition data
                     const filteredIndices = [];
@@ -203,6 +238,8 @@
                     const filteredWeightDates = filteredWeightIndices.map(i => allWeightDates[i]);
                     const filteredWeights = filteredWeightIndices.map(i => allWeights[i]);
                     
+                    console.log(`Filtered data: ${filteredDates.length} nutrition entries, ${filteredWeightDates.length} weight entries`);
+                    
                     return {
                         dates: filteredDates,
                         calories: filteredCalories,
@@ -216,6 +253,7 @@
                 
                 // Initialize charts with default data (30 days)
                 let filteredData = filterDataByDays('30');
+                console.log('Initial filtered data (30 days):', filteredData);
                 updateSummaryStats(filteredData);
                 
                 // Calorie Chart
@@ -275,6 +313,10 @@
                                         return filteredData.dates[index];
                                     }
                                 }
+                            },
+                            decimation: {
+                                enabled: true,
+                                algorithm: 'min-max'
                             }
                         }
                     }
@@ -337,6 +379,10 @@
                                         return filteredData.dates[index];
                                     }
                                 }
+                            },
+                            decimation: {
+                                enabled: true,
+                                algorithm: 'min-max'
                             }
                         }
                     }
@@ -345,6 +391,7 @@
                 {% if weights|length > 0 %}
                 // Weight Chart
                 const weightCtx = document.getElementById('weightChart').getContext('2d');
+                console.log('Initializing weight chart with unit:', weightUnit);
                 
                 // Create an array of the weight goal for each date point
                 const weightGoal = {{ weight_goal|tojson }};
@@ -356,7 +403,7 @@
                         labels: formatDates(filteredData.weightDates),
                         datasets: [
                             {
-                                label: 'Weight ({{ weight_unit }})',
+                                label: `Weight (${weightUnit})`,
                                 data: filteredData.weights,
                                 backgroundColor: 'rgba(255, 159, 64, 0.5)',
                                 borderColor: 'rgba(255, 159, 64, 1)',
@@ -367,7 +414,7 @@
                             },
                             {% if weight_goal %}
                             {
-                                label: 'Weight Goal ({{ weight_unit }})',
+                                label: `Weight Goal (${weightUnit})`,
                                 data: weightGoalArray,
                                 backgroundColor: 'rgba(201, 203, 207, 0.5)',
                                 borderColor: 'rgba(201, 203, 207, 1)',
@@ -386,7 +433,7 @@
                             y: {
                                 title: {
                                     display: true,
-                                    text: 'Weight ({{ weight_unit }})'
+                                    text: `Weight (${weightUnit})`
                                 }
                             },
                             x: {
@@ -410,6 +457,11 @@
                                         return filteredData.weightDates[index];
                                     }
                                 }
+                            },
+                            decimation: {
+                                enabled: true,
+                                algorithm: 'min-max',
+                                samples: 50
                             }
                         }
                     }
@@ -420,6 +472,8 @@
                 document.getElementById('timeRangeSelector').addEventListener('change', function() {
                     const selectedRange = this.value;
                     filteredData = filterDataByDays(selectedRange);
+                    
+                    console.log('Filtered data after range change:', filteredData);
                     
                     // Update summary stats
                     updateSummaryStats(filteredData);
@@ -441,9 +495,16 @@
                     weightGoalArray = Array(filteredData.weights.length).fill(weightGoal);
                     weightChart.data.labels = formatDates(filteredData.weightDates);
                     weightChart.data.datasets[0].data = filteredData.weights;
+                    weightChart.data.datasets[0].label = `Weight (${weightUnit})`;
+                    
                     {% if weight_goal %}
                     weightChart.data.datasets[1].data = weightGoalArray;
+                    weightChart.data.datasets[1].label = `Weight Goal (${weightUnit})`;
                     {% endif %}
+                    
+                    // Update y-axis title
+                    weightChart.options.scales.y.title.text = `Weight (${weightUnit})`;
+                    
                     weightChart.update();
                     {% endif %}
                 });
@@ -478,8 +539,8 @@
                         {% for date, calories, protein, summary, calorie_goal, protein_goal in weekly_summaries %}
                         <tr class="border-t">
                             <td class="date-column">{{ date }}</td>
-                            <td>{{ calories }}</td>
-                            <td>{{ protein }}g</td>
+                            <td>{{ "{:,}".format(calories) }}</td>
+                            <td>{{ "{:,}".format(protein) }}g</td>
                             <td class="summary-column">{{ summary }}</td>
                         </tr>
                         {% endfor %}

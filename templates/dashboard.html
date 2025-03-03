@@ -6,6 +6,8 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<!-- Add Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script>
     function setFormAction(action) {
         document.getElementById('addFoodForm').action = action;
@@ -101,7 +103,7 @@
                 '<td class="p-2">' + logEntry.calories + '</td>' +
                 '<td class="p-2">' + logEntry.protein + 'g</td>' +
                 '<td class="p-2">' +
-                    '<button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="' + logEntry.id + '">Remove</button>' +
+                    '<button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="' + logEntry.id + '"><i class="fas fa-trash"></i></button>' +
                 '</td>' +
             '</tr>'
         );
@@ -304,7 +306,7 @@
                         <td class="p-2">{{ log[2] }}</td>
                         <td class="p-2">{{ log[3] }}g</td>
                         <td class="p-2">
-                            <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}">Remove</button>
+                            <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                     {% endfor %}

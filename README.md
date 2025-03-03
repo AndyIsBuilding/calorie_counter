@@ -11,6 +11,7 @@ that new dish at a restaurant.
 - Manual entry for any food
 - Daily summary with total calories and protein
 - Historical daily summaries
+- Graphs of calorie intake vs. goal, protein intake vs. goal, and weight vs. goal
 - Intra-day food recommendations based on calorie and protein goals
 
 Styling is minimal and intentionally built quickly to get the job done.
@@ -21,5 +22,8 @@ Styling is minimal and intentionally built quickly to get the job done.
 - SQLite
 - HTML
 - JavaScript
+
+# To deploy this on your own on PythonAnywhere: 
+(TBD)
 
 Deployed on PythonAnywhere.com

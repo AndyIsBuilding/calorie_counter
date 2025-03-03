@@ -39,8 +39,8 @@
 
             <!-- Navigation Links - Desktop -->
             <div class="hidden md:flex space-x-4">
-                <a href="{{ url_for('history') }}" class="nav-link">History</a>
-                <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
+                <a href="{{ url_for('history') }}" class="nav-link {% if request.endpoint == 'history' %}text-primary border-b-2 border-primary{% endif %}">History</a>
+                <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}text-primary border-b-2 border-primary{% endif %}">Settings</a>
                 <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
             </div>
 
@@ -88,8 +88,8 @@
         <!-- Mobile menu dropdown -->
         <div id="mobile-menu" class="hidden md:hidden">
             <div class="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
-                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">History</a>
-                <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Settings</a>
+                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'history' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">History</a>
+                <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'settings' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Settings</a>
                 <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Logout</a>
             </div>
         </div>
@@ -104,14 +104,14 @@
             <div class="text-xl font-bold text-primary">Calorie Counter</div>
             <div class="hidden md:flex space-x-4">
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('history') }}" class="nav-link">History</a>
-                <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}text-primary border-b-2 border-primary{% endif %}">Dashboard</a>
+                <a href="{{ url_for('history') }}" class="nav-link {% if request.endpoint == 'history' %}text-primary border-b-2 border-primary{% endif %}">History</a>
+                <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}text-primary border-b-2 border-primary{% endif %}">Settings</a>
                 <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
                 {% else %}
-                <a href="#features" class="nav-link">Features</a>
-                <a href="#testimonials" class="nav-link">Testimonials</a>
-                <a href="{{ url_for('login') }}" class="nav-link">Login</a>
+                <a href="#features" class="nav-link {% if request.endpoint == 'features' %}text-primary border-b-2 border-primary{% endif %}">Features</a>
+                <a href="#testimonials" class="nav-link {% if request.endpoint == 'testimonials' %}text-primary border-b-2 border-primary{% endif %}">Testimonials</a>
+                <a href="{{ url_for('login') }}" class="nav-link {% if request.endpoint == 'login' %}text-primary border-b-2 border-primary{% endif %}">Login</a>
                 {% endif %}
             </div>
             
@@ -133,14 +133,14 @@
         <div id="mobile-menu" class="hidden md:hidden">
             <div class="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Dashboard</a>
-                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">History</a>
-                <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Settings</a>
+                <a href="{{ url_for('dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'dashboard' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Dashboard</a>
+                <a href="{{ url_for('history') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'history' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">History</a>
+                <a href="{{ url_for('settings') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'settings' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Settings</a>
                 <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Logout</a>
                 {% else %}
-                <a href="#features" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Features</a>
-                <a href="#testimonials" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Testimonials</a>
-                <a href="{{ url_for('login') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Login</a>
+                <a href="#features" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'features' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Features</a>
+                <a href="#testimonials" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'testimonials' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Testimonials</a>
+                <a href="{{ url_for('login') }}" class="block px-3 py-2 rounded-md text-base font-medium {% if request.endpoint == 'login' %}text-primary border-l-4 border-primary bg-gray-50{% else %}text-gray-700 hover:text-gray-900 hover:bg-gray-50{% endif %}">Login</a>
                 {% endif %}
             </div>
         </div>

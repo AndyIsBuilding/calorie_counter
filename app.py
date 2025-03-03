@@ -133,6 +133,7 @@ class User(UserMixin):
         if self.weight_unit == 1:  # If user prefers lbs
             # Convert lbs to kg for storage (1 lb = 0.45359237 kg)
             stored_weight = weight * 0.45359237
+            print(f"Converting weight from lbs to kg for storage: {weight} lbs -> {stored_weight} kg")
             
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -143,9 +144,11 @@ class User(UserMixin):
         
         if existing_log:
             # Update existing log
+            print(f"Updating existing weight log for {date}: {stored_weight} kg")
             c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (stored_weight, existing_log[0]))
         else:
             # Insert new log
+            print(f"Creating new weight log for {date}: {stored_weight} kg")
             c.execute("INSERT INTO weight_logs (date, weight, user_id) VALUES (?, ?, ?)", 
                      (date, stored_weight, self.id))
         
@@ -167,13 +170,18 @@ class User(UserMixin):
         
         conn.close()
         
+        print(f"Retrieved {len(logs)} weight logs from database")
+        
         # Convert weights to user's preferred unit
         converted_logs = []
         for date, weight in logs:
             if self.weight_unit == 1:  # If user prefers lbs
                 # Convert kg to lbs (1 kg = 2.20462 lbs)
-                weight = round(weight * 2.20462, 1)
-            converted_logs.append((date, weight))
+                converted_weight = round(weight * 2.20462, 1)
+                print(f"Converting weight from kg to lbs for display: {weight} kg -> {converted_weight} lbs")
+                converted_logs.append((date, converted_weight))
+            else:
+                converted_logs.append((date, weight))
             
         return converted_logs
 
@@ -193,36 +201,69 @@ def load_user(user_id):
     return None
 
 def init_db():
+    """Initialize the database with the required tables."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
+    # Create users table
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100, weight_goal REAL DEFAULT NULL)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE NOT NULL,
+                  password TEXT NOT NULL,
+                  calorie_goal INTEGER DEFAULT 2000,
+                  protein_goal INTEGER DEFAULT 100,
+                  weight_goal REAL,
+                  weight_unit INTEGER DEFAULT 0)''')
+    
+    # Create foods table with user_id column
     c.execute('''CREATE TABLE IF NOT EXISTS foods
-                 (id INTEGER PRIMARY KEY, name TEXT, calories INTEGER, protein INTEGER)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  calories INTEGER NOT NULL,
+                  protein INTEGER NOT NULL,
+                  user_id INTEGER,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
+    
+    # Create daily_log table
     c.execute('''CREATE TABLE IF NOT EXISTS daily_log
-                 (id INTEGER PRIMARY KEY, date TEXT, food_name TEXT, calories INTEGER, protein INTEGER, user_id INTEGER,
-                  FOREIGN KEY(user_id) REFERENCES users(id))''')
-    c.execute("""CREATE TABLE IF NOT EXISTS daily_summary
-                 (id INTEGER PRIMARY KEY, date TEXT, total_calories INTEGER, total_protein INTEGER, summary TEXT, user_id INTEGER,
-                  calorie_goal INTEGER DEFAULT 2000, protein_goal INTEGER DEFAULT 100,
-                  FOREIGN KEY(user_id) REFERENCES users(id))""")
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  date TEXT NOT NULL,
+                  food_name TEXT NOT NULL,
+                  calories INTEGER NOT NULL,
+                  protein INTEGER NOT NULL,
+                  user_id INTEGER NOT NULL,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
     
-    # Add weight_logs table if it doesn't exist
+    # Create daily_summary table
+    c.execute('''CREATE TABLE IF NOT EXISTS daily_summary
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  date TEXT NOT NULL,
+                  total_calories INTEGER NOT NULL,
+                  total_protein INTEGER NOT NULL,
+                  summary TEXT,
+                  user_id INTEGER NOT NULL,
+                  calorie_goal INTEGER,
+                  protein_goal INTEGER,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
+    
+    # Create weight_logs table
     c.execute('''CREATE TABLE IF NOT EXISTS weight_logs
-                 (id INTEGER PRIMARY KEY, date TEXT, weight REAL, user_id INTEGER,
-                  FOREIGN KEY(user_id) REFERENCES users(id))''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  date TEXT NOT NULL,
+                  weight REAL NOT NULL,
+                  user_id INTEGER NOT NULL,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
     
-    # Add weight_goal column to users table if it doesn't exist
-    try:
-        c.execute("SELECT weight_goal FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        c.execute("ALTER TABLE users ADD COLUMN weight_goal REAL DEFAULT NULL")
+    # Check if user_id column exists in foods table
+    c.execute("PRAGMA table_info(foods)")
+    columns = c.fetchall()
+    column_names = [column[1] for column in columns]
     
-    # Add weight_unit column to users table if it doesn't exist
-    try:
-        c.execute("SELECT weight_unit FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        c.execute("ALTER TABLE users ADD COLUMN weight_unit INTEGER DEFAULT 0")  # Default to kg (0)
+    # Add user_id column if it doesn't exist
+    if 'user_id' not in column_names:
+        print("Adding user_id column to foods table")
+        c.execute("ALTER TABLE foods ADD COLUMN user_id INTEGER")
+        c.execute("UPDATE foods SET user_id = 1")  # Set default user_id to 1 for existing foods
     
     conn.commit()
     conn.close()
@@ -237,32 +278,34 @@ def get_local_date():
 def dashboard():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT * FROM foods ORDER BY name")  # Order foods alphabetically
-    foods = c.fetchall()
     
+    # Get today's date in the user's timezone
     today = get_local_date().isoformat()
     
-    # Check if there's a daily summary for today
-    c.execute("SELECT id FROM daily_summary WHERE date = ? AND user_id = ?", (today, current_user.id))
-    summary_exists = c.fetchone()
+    # Get today's log
+    c.execute("""SELECT id, food_name, calories, protein 
+                 FROM daily_log 
+                 WHERE date = ? AND user_id = ?""", 
+              (today, current_user.id))
+    daily_log = c.fetchall()
     
-    if summary_exists:
-        # If summary exists, set daily_log to empty list
-        daily_log = []
-        total_calories = 0
-        total_protein = 0
-    else:
-        # If no summary, fetch the daily log as before
-        c.execute("""SELECT id, food_name, calories, protein 
-                     FROM daily_log
-                     WHERE date = ? AND user_id = ?""", (today, current_user.id))
-        daily_log = c.fetchall()
-        total_calories = sum(food[2] for food in daily_log)
-        total_protein = sum(food[3] for food in daily_log)
+    # Calculate totals
+    total_calories = sum(log[2] for log in daily_log)
+    total_protein = sum(log[3] for log in daily_log)
+    
+    # Get quick add foods for the current user
+    c.execute("SELECT id, name, calories, protein FROM foods WHERE user_id = ? ORDER BY name", (current_user.id,))
+    foods = c.fetchall()
     
     conn.close()
-    return render_template('dashboard.html', foods=foods, daily_log=daily_log, 
-                           total_calories=total_calories, total_protein=total_protein)
+    
+    return render_template('dashboard.html', 
+                          daily_log=daily_log,
+                          total_calories=total_calories,
+                          total_protein=total_protein,
+                          foods=foods,
+                          calorie_goal=current_user.calorie_goal,
+                          protein_goal=current_user.protein_goal)
 
 @app.route('/edit_history')
 @login_required
@@ -399,19 +442,30 @@ def index():
 @app.route('/quick_add_food', methods=['POST'])
 @login_required
 def quick_add_food():
-    name = request.form['name']
-    calories = int(request.form['calories'])
-    protein = int(request.form['protein'])
+    name = request.form.get('name')
+    calories = request.form.get('calories', type=int)
+    protein = request.form.get('protein', type=int)
+    
+    if not name or not calories or not protein:
+        return jsonify({'success': False, 'message': 'Missing required fields'})
     
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO foods (name, calories, protein) VALUES (?, ?, ?)", (name, calories, protein))
+    
+    # Insert the food with the current user's ID
+    c.execute("INSERT INTO foods (name, calories, protein, user_id) VALUES (?, ?, ?, ?)", 
+              (name, calories, protein, current_user.id))
+    
+    # Get the ID of the newly inserted food
     food_id = c.lastrowid
+    
     conn.commit()
     conn.close()
     
+    # Return the food data including the ID
     return jsonify({
-        'success': True,
+        'success': True, 
+        'message': 'Food added successfully',
         'food': {
             'id': food_id,
             'name': name,
@@ -467,47 +521,48 @@ def log_food():
 @app.route('/log_quick_food', methods=['POST'])
 @login_required
 def log_quick_food():
-    food_id = request.form['food_id']
-    today = get_local_date().isoformat()
+    food_id = request.form.get('food_id')
+    
+    if not food_id:
+        return jsonify({'success': False, 'message': 'No food ID provided'})
     
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    c.execute("SELECT name, calories, protein FROM foods WHERE id = ?", (food_id,))
+    # Get the food details, ensuring it belongs to the current user
+    c.execute("SELECT name, calories, protein FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
     food = c.fetchone()
     
-    if food:
-        food_name, calories, protein = food
-        c.execute("INSERT INTO daily_log (date, food_name, calories, protein, user_id) VALUES (?, ?, ?, ?, ?)", 
-                  (today, food_name, calories, protein, current_user.id))
-        log_id = c.lastrowid
-        conn.commit()
-        
-        # Calculate new totals
-        c.execute("SELECT SUM(calories), SUM(protein) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
-        total_calories, total_protein = c.fetchone()
-        
+    if not food:
         conn.close()
-        return jsonify({
-            'success': True,
-            'log_entry': {
-                'id': log_id,
-                'food_name': food_name,
-                'calories': calories,
-                'protein': protein
-            },
-            'totals': {
-                'calories': total_calories,
-                'protein': total_protein
-            }
-        })
-    else:
-        conn.close()
-        return jsonify({
-            'success': False,
-            'message': 'Food not found!'
-        }), 404
+        return jsonify({'success': False, 'message': 'Food not found or you do not have permission to log it'})
     
+    name, calories, protein = food
+    today = get_local_date().isoformat()
+    
+    # Insert into daily log
+    c.execute("INSERT INTO daily_log (date, food_name, calories, protein, user_id) VALUES (?, ?, ?, ?, ?)",
+             (today, name, calories, protein, current_user.id))
+    log_id = c.lastrowid
+    
+    conn.commit()
+    conn.close()
+    
+    # Return the log entry and updated totals
+    return jsonify({
+        'success': True,
+        'log_entry': {
+            'id': log_id,
+            'food_name': name,
+            'calories': calories,
+            'protein': protein
+        },
+        'totals': {
+            'calories': request.form.get('total_calories', type=int, default=0) + calories,
+            'protein': request.form.get('total_protein', type=int, default=0) + protein
+        }
+    })
+
 
 @app.route('/remove_food/<int:log_id>', methods=['POST'])
 @login_required
@@ -647,7 +702,7 @@ def register():
             user_count = c.fetchone()[0]
             conn.close()
 
-            if user_count > 0:
+            if user_count > 1:
                 flash('Only one user (the creator) is allowed in this application.', 'error')
                 return redirect(url_for('index'))
         
@@ -871,9 +926,14 @@ def settings():
         # Get weight logs
         weight_logs = current_user.get_weight_logs(limit=10)
         
+        # Fetch all foods (quick add foods) for the current user
+        c.execute("SELECT id, name, calories, protein FROM foods WHERE user_id = ? ORDER BY name", (current_user.id,))
+        foods = c.fetchall()
+        
         conn.close()
     else:
         weight_logs = []
+        foods = []
     
     # No need to fetch weekly summaries anymore as they're now in the history page
     return render_template('settings.html', 
@@ -882,7 +942,8 @@ def settings():
                           today_calories=today_calories,
                           today_protein=today_protein,
                           weight_logs=weight_logs,
-                          success_message=success_message)
+                          success_message=success_message,
+                          foods=foods)
 
 @app.route('/update_settings', methods=['POST'])
 @login_required
@@ -893,6 +954,10 @@ def update_settings():
     weight_goal = request.form.get('weight_goal', type=float)
     current_weight = request.form.get('current_weight', type=float)
     weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
+    
+    # Debug logging
+    print(f"Update settings: calorie_goal={calorie_goal}, protein_goal={protein_goal}, weight_goal={weight_goal}, current_weight={current_weight}, weight_unit={weight_unit}")
+    print(f"Previous weight unit: {current_user.weight_unit}")
     
     # Validate the input
     if calorie_goal is None or protein_goal is None:
@@ -912,6 +977,17 @@ def update_settings():
             )
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
+    
+    # Check if weight unit has changed
+    weight_unit_changed = current_user.weight_unit != weight_unit
+    
+    # Convert weight goal to kg for storage if user is using pounds
+    if weight_goal is not None:
+        if weight_unit == 1:  # If user is using pounds
+            # Convert from lbs to kg for storage (1 lb = 0.45359237 kg)
+            weight_goal_kg = weight_goal * 0.45359237
+            print(f"Converting weight goal from lbs to kg for storage: {weight_goal} lbs -> {weight_goal_kg} kg")
+            weight_goal = weight_goal_kg
     
     # Update the user's goals using the User class method
     current_user.update_goals(calorie_goal, protein_goal, weight_goal, weight_unit)
@@ -969,7 +1045,22 @@ def history():
     if current_user.weight_unit == 1:  # If user prefers lbs
         weights = [round(w * 2.20462, 1) for w in weights]  # Convert kg to lbs
     
+    # Determine weight unit string
+    weight_unit = "lbs" if current_user.weight_unit == 1 else "kg"
+    
+    # Get weight goal in the correct unit
+    weight_goal = None
+    if current_user.weight_goal is not None:
+        weight_goal = current_user.weight_goal
+        if current_user.weight_unit == 1:  # If user prefers lbs and goal is stored in kg
+            weight_goal = round(weight_goal * 2.20462, 1)  # Convert kg to lbs
+    
     conn.close()
+    
+    # Debug logging
+    print(f"History data: {len(dates)} nutrition entries, {len(weight_dates)} weight entries")
+    print(f"Weight unit: {weight_unit}, Weight goal: {weight_goal}")
+    
     return render_template('history.html', 
                           weekly_summaries=summaries,
                           chart_dates=dates,
@@ -979,8 +1070,45 @@ def history():
                           chart_protein_goals=protein_goals,
                           weight_dates=weight_dates,
                           weights=weights,
-                          weight_goal=current_user.weight_goal,
-                          weight_unit="lbs" if current_user.weight_unit == 1 else "kg")
+                          weight_goal=weight_goal,
+                          weight_unit=weight_unit)
+
+@app.route('/remove_quick_add_food', methods=['POST'])
+@login_required
+def remove_quick_add_food():
+    print("remove_quick_add_food endpoint called")
+    food_id = request.form.get('food_id')
+    print(f"Received food_id: {food_id}")
+    print(f"Request form data: {request.form}")
+    
+    if not food_id:
+        print("No food ID provided")
+        return jsonify({'success': False, 'message': 'No food ID provided'})
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # First check if the food exists and belongs to the current user
+        c.execute("SELECT id FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
+        food = c.fetchone()
+        
+        if not food:
+            print(f"Food with ID {food_id} not found or does not belong to the current user")
+            conn.close()
+            return jsonify({'success': False, 'message': 'Food not found or you do not have permission to remove it'})
+        
+        # Delete the food
+        print(f"Deleting food with ID {food_id}")
+        c.execute("DELETE FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
+        conn.commit()
+        conn.close()
+        
+        print("Food deleted successfully")
+        return jsonify({'success': True, 'message': 'Food removed successfully'})
+    except Exception as e:
+        print(f"Error removing quick add food: {e}")
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
 if __name__ == '__main__':
     init_db()
