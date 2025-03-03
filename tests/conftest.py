@@ -3,7 +3,12 @@ import sys
 import tempfile
 import pytest
 import sqlite3
+import logging
 from werkzeug.security import generate_password_hash
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Add the parent directory to sys.path to import app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -47,7 +52,21 @@ def init_test_db(db_path):
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         calorie_goal INTEGER DEFAULT 2000,
-        protein_goal INTEGER DEFAULT 100
+        protein_goal INTEGER DEFAULT 100,
+        weight_goal REAL,
+        weight_unit INTEGER DEFAULT 0
+    )
+    ''')
+    
+    # Create foods table
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS foods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        calories INTEGER NOT NULL,
+        protein INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id)
     )
     ''')
     
@@ -117,14 +136,29 @@ def runner(app):
 def auth(client):
     """Authentication helper for tests."""
     class AuthActions:
-        def login(self, username='testuser', password='password'):
-            return client.post(
+        def login(self, username='testuser', password='password', follow_redirects=False):
+            logger.debug(f"Attempting login with username: {username}")
+            # Always set X-Requested-With header for AJAX requests unless explicitly following redirects
+            headers = {'X-Requested-With': 'XMLHttpRequest'} if not follow_redirects else {}
+            response = client.post(
                 '/login',
                 data={'username': username, 'password': password},
-                follow_redirects=True
+                headers=headers,
+                follow_redirects=follow_redirects
             )
+            logger.debug(f"Login response status: {response.status_code}")
+            logger.debug(f"Login response data: {response.get_data(as_text=True)}")
+            # For AJAX requests, we want to preserve the original status code
+            if not follow_redirects:
+                return response
+            # For non-AJAX requests, we want to follow redirects and get the final status code
+            return response
             
         def logout(self):
-            return client.get('/logout', follow_redirects=True)
+            logger.debug("Attempting logout")
+            response = client.get('/logout', follow_redirects=True)
+            logger.debug(f"Logout response status: {response.status_code}")
+            logger.debug(f"Logout response data: {response.get_data(as_text=True)}")
+            return response
     
     return AuthActions() 

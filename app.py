@@ -458,7 +458,13 @@ def quick_add_food():
     protein = request.form.get('protein', type=int)
     
     if not name or not calories or not protein:
-        return jsonify({'success': False, 'message': 'Missing required fields'})
+        return jsonify({
+            'success': False,
+            'toast': {
+                'message': 'Missing required fields',
+                'category': 'error'
+            }
+        })
     
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -475,8 +481,11 @@ def quick_add_food():
     
     # Return the food data including the ID
     return jsonify({
-        'success': True, 
-        'message': 'Food added successfully',
+        'success': True,
+        'toast': {
+            'message': 'Food added successfully',
+            'category': 'success'
+        },
         'food': {
             'id': food_id,
             'name': name,
@@ -687,12 +696,14 @@ def export_csv():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated: 
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'redirect_url': url_for('dashboard')})
         return redirect(url_for('dashboard')) 
 
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(app.config['DB_PATH'])
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = c.fetchone()
@@ -704,8 +715,26 @@ def login():
             weight_unit = user[6] if len(user) > 6 else 0  # Default to kg (0)
             user_obj = User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
             login_user(user_obj)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'redirect_url': url_for('dashboard'),
+                    'user': {
+                        'id': user_obj.id,
+                        'username': user_obj.username,
+                        'calorie_goal': user_obj.calorie_goal,
+                        'protein_goal': user_obj.protein_goal,
+                        'weight_goal': user_obj.weight_goal,
+                        'weight_unit': user_obj.weight_unit
+                    }
+                })
             return redirect(url_for('dashboard'))
         else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid username or password'
+                }), 401
             flash('Invalid username or password', 'error')
     
     return render_template('login.html')
@@ -726,35 +755,42 @@ def register():
         # Skip this check if we're in testing mode
         if not app.config['TESTING']:
             conn = sqlite3.connect(app.config['DB_PATH'])
-            c = conn.cursor()
-            c.execute("SELECT COUNT(*) FROM users")
-            user_count = c.fetchone()[0]
-            conn.close()
-
-            if user_count > 1:
-                flash('Only one user (the creator) is allowed in this application.', 'error')
-                return redirect(url_for('index'))
+            try:
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM users")
+                user_count = c.fetchone()[0]
+                if user_count > 1:
+                    flash('Only one user (the creator) is allowed in this application.', 'error')
+                    return redirect(url_for('index'))
+            finally:
+                conn.close()
         
         username = request.form['username']
         password = request.form['password']
         hashed_password = generate_password_hash(password)
         
         conn = sqlite3.connect(app.config['DB_PATH'])
-        c = conn.cursor()
         try:
+            c = conn.cursor()
+            # First check if username exists
+            c.execute("SELECT username FROM users WHERE username = ?", (username,))
+            if c.fetchone():
+                flash('Username already exists.', 'error')
+                return redirect(url_for('register'))
+            
+            # If username doesn't exist, proceed with insertion
             c.execute("INSERT INTO users (username, password, calorie_goal, protein_goal, weight_goal, weight_unit) VALUES (?, ?, ?, ?, ?, ?)", 
                      (username, hashed_password, DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL, None, 0))
             conn.commit()
-            conn.close()
             flash('Registration successful. Please log in.', 'success')
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError as e:
+        except sqlite3.Error as e:
+            conn.rollback()
+            flash('An error occurred during registration. Please try again.', 'error')
+            return redirect(url_for('register'))
+        finally:
             conn.close()
-            flash('Username already exists. Please choose a different one.', 'error')
-        except Exception as e:
-            conn.close()
-            flash(f'An error occurred: {e}', 'error')
-    
+
     return render_template('register.html')
 
 @app.errorhandler(400)
@@ -780,6 +816,17 @@ def get_recommendations():
     
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
+    # First check if user has at least 5 foods in their Quick Add section
+    c.execute("SELECT COUNT(*) FROM foods WHERE user_id = ?", (current_user.id,))
+    food_count = c.fetchone()[0]
+    
+    if food_count < 5:
+        conn.close()
+        return jsonify({
+            'insufficient_foods': True,
+            'message': f'Please add at least 5 foods to your Quick Add section to get recommendations. You currently have {food_count} food{"s" if food_count != 1 else ""}.'
+        })
     
     c.execute("SELECT SUM(calories) FROM daily_log WHERE date = ? AND user_id = ?", (today, current_user.id))
     total_calories = c.fetchone()[0] or 0
@@ -913,6 +960,7 @@ def get_testimonials():
     return jsonify(testimonials)
 
 @app.route('/settings') 
+@login_required
 def settings(): 
     # Get success message from flash if it exists
     success_message = None
@@ -927,52 +975,60 @@ def settings():
     today_calories = 0
     today_protein = 0
     
-    if current_user.is_authenticated:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        today = get_local_date().isoformat()
-        
-        # First check if there's a daily summary for today
-        c.execute("""SELECT total_calories, total_protein 
-                     FROM daily_summary 
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = get_local_date().isoformat()
+    
+    # First check if there's a daily summary for today
+    c.execute("""SELECT total_calories, total_protein 
+                 FROM daily_summary 
+                 WHERE date = ? AND user_id = ?""", 
+              (today, current_user.id))
+    summary = c.fetchone()
+    
+    if summary:
+        today_calories, today_protein = summary
+    else:
+        # If no summary, calculate from daily log
+        c.execute("""SELECT SUM(calories), SUM(protein) 
+                     FROM daily_log 
                      WHERE date = ? AND user_id = ?""", 
                   (today, current_user.id))
-        summary = c.fetchone()
+        log_totals = c.fetchone()
         
-        if summary:
-            today_calories, today_protein = summary
-        else:
-            # If no summary, calculate from daily log
-            c.execute("""SELECT SUM(calories), SUM(protein) 
-                         FROM daily_log 
-                         WHERE date = ? AND user_id = ?""", 
-                      (today, current_user.id))
-            log_totals = c.fetchone()
-            
-            if log_totals[0] is not None:
-                today_calories, today_protein = log_totals
-        
-        # Get weight logs
-        weight_logs = current_user.get_weight_logs(limit=10)
-        
-        # Fetch all foods (quick add foods) for the current user
-        c.execute("SELECT id, name, calories, protein FROM foods WHERE user_id = ? ORDER BY name", (current_user.id,))
-        foods = c.fetchall()
-        
-        conn.close()
-    else:
-        weight_logs = []
-        foods = []
+        if log_totals[0] is not None:
+            today_calories, today_protein = log_totals
     
-    # No need to fetch weekly summaries anymore as they're now in the history page
+    # Get weight logs
+    weight_logs = current_user.get_weight_logs(limit=10)
+    
+    # Fetch all foods (quick add foods) for the current user
+    c.execute("SELECT id, name, calories, protein FROM foods WHERE user_id = ? ORDER BY name", (current_user.id,))
+    foods = c.fetchall()
+    
+    conn.close()
+    
+    # If this is an AJAX request, return only the quick add foods section
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('settings.html', 
+                             foods=foods,
+                             success_message=success_message,
+                             today_calories=today_calories,
+                             today_protein=today_protein,
+                             weight_logs=weight_logs,
+                             ajax_only=True,
+                             calorie_goal=current_user.calorie_goal,
+                             protein_goal=current_user.protein_goal)
+    
+    # For regular requests, return the full page
     return render_template('settings.html', 
-                          calorie_goal=current_user.calorie_goal, 
-                          protein_goal=current_user.protein_goal,
-                          today_calories=today_calories,
-                          today_protein=today_protein,
-                          weight_logs=weight_logs,
-                          success_message=success_message,
-                          foods=foods)
+                         foods=foods,
+                         success_message=success_message,
+                         today_calories=today_calories,
+                         today_protein=today_protein,
+                         weight_logs=weight_logs,
+                         calorie_goal=current_user.calorie_goal,
+                         protein_goal=current_user.protein_goal)
 
 @app.route('/update_settings', methods=['POST'])
 @login_required
@@ -991,19 +1047,25 @@ def update_settings():
     # Validate the input
     if calorie_goal is None or protein_goal is None:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return toast_response(
-                message='Invalid input. Please enter valid numbers for calorie and protein goals.',
-                category='error'
-            )
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'Invalid input. Please enter valid numbers for calorie and protein goals.',
+                    'category': 'error'
+                }
+            })
         flash('Invalid input. Please enter valid numbers for calorie and protein goals.', 'error')
         return redirect(url_for('settings'))
     
     if calorie_goal <= 0 or protein_goal <= 0:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return toast_response(
-                message='Calorie and protein goals must be positive numbers.',
-                category='error'
-            )
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'Calorie and protein goals must be positive numbers.',
+                    'category': 'error'
+                }
+            })
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
     
@@ -1030,11 +1092,14 @@ def update_settings():
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return toast_response(
-            message=flash_message,
-            category='success',
-            redirect_url=url_for('settings')
-        )
+        return jsonify({
+            'success': True,
+            'toast': {
+                'message': flash_message,
+                'category': 'success'
+            },
+            'redirect': url_for('settings')
+        })
     
     # For non-AJAX requests, use flash and redirect
     flash(flash_message, 'success')
@@ -1111,33 +1176,64 @@ def remove_quick_add_food():
     print(f"Request form data: {request.form}")
     
     if not food_id:
-        print("No food ID provided")
-        return jsonify({'success': False, 'message': 'No food ID provided'})
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'No food ID provided',
+                    'category': 'error'
+                }
+            })
+        flash('No food ID provided', 'error')
+        return redirect(url_for('settings'))
     
+    conn = sqlite3.connect(DB_PATH)
     try:
-        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        
-        # First check if the food exists and belongs to the current user
+        # First check if the food belongs to the current user
         c.execute("SELECT id FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
-        food = c.fetchone()
-        
-        if not food:
-            print(f"Food with ID {food_id} not found or does not belong to the current user")
-            conn.close()
-            return jsonify({'success': False, 'message': 'Food not found or you do not have permission to remove it'})
+        if not c.fetchone():
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'toast': {
+                        'message': 'Food not found or unauthorized',
+                        'category': 'error'
+                    }
+                })
+            flash('Food not found or unauthorized', 'error')
+            return redirect(url_for('settings'))
         
         # Delete the food
-        print(f"Deleting food with ID {food_id}")
         c.execute("DELETE FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
         conn.commit()
-        conn.close()
         
-        print("Food deleted successfully")
-        return jsonify({'success': True, 'message': 'Food removed successfully'})
-    except Exception as e:
-        print(f"Error removing quick add food: {e}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'toast': {
+                    'message': 'Food removed successfully',
+                    'category': 'success'
+                }
+            })
+        
+        flash('Food removed successfully', 'success')
+        return redirect(url_for('settings'))
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"Database error: {e}")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'Database error occurred',
+                    'category': 'error'
+                }
+            })
+        flash('Database error occurred', 'error')
+        return redirect(url_for('settings'))
+    finally:
+        conn.close()
 
 def migrate_daily_summary_table():
     """Add a unique constraint on date and user_id in the daily_summary table."""

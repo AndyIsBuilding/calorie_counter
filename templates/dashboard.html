@@ -424,17 +424,22 @@
                 Show Recommendations
             </button>
             <div id="recommendationsContainer" class="mt-4 hidden">
-                <div class="mb-4">
-                    <h3 class="font-bold">Hit both calorie and protein goals:</h3>
-                    <p id="hitBoth"></p>
+                <div id="errorMessage" class="mb-4 hidden">
+                    <p id="hitBoth" class="text-amber-500"></p>
                 </div>
-                <div class="mb-4">
-                    <h3 class="font-bold">Prioritize protein goal:</h3>
-                    <p id="prioritizeProtein"></p>
-                </div>
-                <div class="mb-4">
-                    <h3 class="font-bold">Prioritize calorie goal:</h3>
-                    <p id="prioritizeCalories"></p>
+                <div id="recommendationResults" class="hidden">
+                    <div class="mb-4">
+                        <h3 class="font-bold">Hit both calorie and protein goals:</h3>
+                        <p id="hitBothResult"></p>
+                    </div>
+                    <div class="mb-4">
+                        <h3 class="font-bold">Prioritize protein goal:</h3>
+                        <p id="prioritizeProtein"></p>
+                    </div>
+                    <div class="mb-4">
+                        <h3 class="font-bold">Prioritize calorie goal:</h3>
+                        <p id="prioritizeCalories"></p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -451,6 +456,23 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Received recommendations:', data);
+                    
+                    const errorMessageDiv = document.getElementById('errorMessage');
+                    const recommendationResultsDiv = document.getElementById('recommendationResults');
+                    document.getElementById('recommendationsContainer').classList.remove('hidden');
+                    
+                    // Check if we received an insufficient foods message
+                    if (data.insufficient_foods) {
+                        errorMessageDiv.classList.remove('hidden');
+                        recommendationResultsDiv.classList.add('hidden');
+                        document.getElementById('hitBoth').textContent = data.message;
+                        return;
+                    }
+                    
+                    // Show recommendations
+                    errorMessageDiv.classList.add('hidden');
+                    recommendationResultsDiv.classList.remove('hidden');
+                    
                     const formatRecommendation = (recommendation) => {
                         if (!recommendation || !recommendation.foods || recommendation.foods.length === 0) {
                             return 'No recommendations available';
@@ -461,13 +483,16 @@
                         return `${foodList} -- Recommendation Total: ${recommendation.total_calories}cal (${recommendation.total_protein}g) -- Day's Total: ${recommendation.day_total_calories}cal (${recommendation.day_total_protein}g)`;
                     };
 
-                    document.getElementById('hitBoth').textContent = formatRecommendation(data.hit_both);
+                    document.getElementById('hitBothResult').textContent = formatRecommendation(data.hit_both);
                     document.getElementById('prioritizeProtein').textContent = formatRecommendation(data.protein_first);
                     document.getElementById('prioritizeCalories').textContent = formatRecommendation(data.calorie_first);
-                    document.getElementById('recommendationsContainer').classList.remove('hidden');
                 })
                 .catch((error) => {
                     console.error('Error:', error);
+                    document.getElementById('recommendationsContainer').classList.remove('hidden');
+                    document.getElementById('errorMessage').classList.remove('hidden');
+                    document.getElementById('recommendationResults').classList.add('hidden');
+                    document.getElementById('hitBoth').textContent = 'Error getting recommendations. Please try again.';
                 });
             });
         </script>
