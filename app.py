@@ -234,7 +234,7 @@ def init_db():
                   user_id INTEGER NOT NULL,
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     
-    # Create daily_summary table
+    # Create daily_summary table with unique constraint on date and user_id
     c.execute('''CREATE TABLE IF NOT EXISTS daily_summary
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   date TEXT NOT NULL,
@@ -244,7 +244,8 @@ def init_db():
                   user_id INTEGER NOT NULL,
                   calorie_goal INTEGER,
                   protein_goal INTEGER,
-                  FOREIGN KEY (user_id) REFERENCES users(id))''')
+                  FOREIGN KEY (user_id) REFERENCES users(id),
+                  UNIQUE(date, user_id))''')
     
     # Create weight_logs table
     c.execute('''CREATE TABLE IF NOT EXISTS weight_logs
@@ -267,6 +268,9 @@ def init_db():
     
     conn.commit()
     conn.close()
+    
+    # Run migration for daily_summary table if needed
+    migrate_daily_summary_table()
 
 
 def get_local_date():
@@ -281,6 +285,12 @@ def dashboard():
     
     # Get today's date in the user's timezone
     today = get_local_date().isoformat()
+    
+    # Check if a summary exists for today
+    c.execute("""SELECT id FROM daily_summary 
+                 WHERE date = ? AND user_id = ?""", 
+              (today, current_user.id))
+    has_summary = c.fetchone() is not None
     
     # Get today's log
     c.execute("""SELECT id, food_name, calories, protein 
@@ -305,7 +315,8 @@ def dashboard():
                           total_protein=total_protein,
                           foods=foods,
                           calorie_goal=current_user.calorie_goal,
-                          protein_goal=current_user.protein_goal)
+                          protein_goal=current_user.protein_goal,
+                          has_summary=has_summary)
 
 @app.route('/edit_history')
 @login_required
@@ -611,24 +622,42 @@ def save_summary():
     total_calories = sum(food[1] for food in foods)
     total_protein = sum(food[2] for food in foods)
     
-    # Update the daily_summary table with the user's current goals
-    c.execute("""INSERT OR REPLACE INTO daily_summary (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)""", 
-                (today, total_calories, total_protein, summary, current_user.id, current_user.calorie_goal, current_user.protein_goal))
+    # Check if a summary already exists for today
+    c.execute("""SELECT id FROM daily_summary 
+                 WHERE date = ? AND user_id = ?""", 
+              (today, current_user.id))
+    existing_summary = c.fetchone()
+    
+    if existing_summary:
+        # Update existing summary
+        c.execute("""UPDATE daily_summary 
+                     SET total_calories = ?, total_protein = ?, summary = ?, 
+                         calorie_goal = ?, protein_goal = ?
+                     WHERE date = ? AND user_id = ?""", 
+                  (total_calories, total_protein, summary, 
+                   current_user.calorie_goal, current_user.protein_goal,
+                   today, current_user.id))
+    else:
+        # Insert new summary
+        c.execute("""INSERT INTO daily_summary 
+                     (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)""", 
+                  (today, total_calories, total_protein, summary, 
+                   current_user.id, current_user.calorie_goal, current_user.protein_goal))
     
     conn.commit()
     conn.close()
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return toast_response(
-            message='Daily summary saved successfully!',
-            category='success',
-            redirect_url=url_for('dashboard')
-        )
+        return jsonify({
+            'success': True,
+            'message': 'Daily summary updated successfully!',
+            'redirect_url': url_for('dashboard')
+        })
     
     # For non-AJAX requests, use flash and redirect
-    flash('Daily summary saved successfully!', 'success')
+    flash('Daily summary updated successfully!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/export_csv')
@@ -1110,7 +1139,52 @@ def remove_quick_add_food():
         print(f"Error removing quick add food: {e}")
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
+def migrate_daily_summary_table():
+    """Add a unique constraint on date and user_id in the daily_summary table."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    try:
+        # Check if we need to migrate
+        c.execute("PRAGMA table_info(daily_summary)")
+        columns = c.fetchall()
+        
+        # Create a new table with the unique constraint
+        c.execute('''CREATE TABLE IF NOT EXISTS daily_summary_new
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      date TEXT NOT NULL,
+                      total_calories INTEGER NOT NULL,
+                      total_protein INTEGER NOT NULL,
+                      summary TEXT,
+                      user_id INTEGER NOT NULL,
+                      calorie_goal INTEGER,
+                      protein_goal INTEGER,
+                      FOREIGN KEY (user_id) REFERENCES users(id),
+                      UNIQUE(date, user_id))''')
+        
+        # Copy data from the old table to the new one, keeping only the most recent entry for each date/user
+        c.execute('''INSERT INTO daily_summary_new (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
+                     SELECT date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal
+                     FROM daily_summary
+                     WHERE id IN (
+                         SELECT MAX(id) 
+                         FROM daily_summary 
+                         GROUP BY date, user_id
+                     )''')
+        
+        # Drop the old table and rename the new one
+        c.execute("DROP TABLE daily_summary")
+        c.execute("ALTER TABLE daily_summary_new RENAME TO daily_summary")
+        
+        conn.commit()
+        print("Successfully migrated daily_summary table to include unique constraint on date and user_id")
+    except Exception as e:
+        conn.rollback()
+        print(f"Error migrating daily_summary table: {e}")
+    finally:
+        conn.close()
+
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, port=5001)
+    app.run(debug=True)
 

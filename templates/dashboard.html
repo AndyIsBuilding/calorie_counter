@@ -13,7 +13,60 @@
         document.getElementById('addFoodForm').action = action;
     }
 
+    // Toast notification function
+    function showToast(message, duration = 3000) {
+        // Get existing toasts
+        const existingToasts = document.querySelectorAll('.toast-notification');
+        const toastCount = existingToasts.length;
+        
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification fixed right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300';
+        toast.textContent = message;
+        
+        // Position the toast based on how many existing toasts there are
+        const bottomOffset = 16 + (toastCount * 60); // 16px initial offset + 60px per toast
+        toast.style.bottom = bottomOffset + 'px';
+        
+        // Add to document
+        document.body.appendChild(toast);
+        
+        // Extend duration based on number of toasts
+        const extendedDuration = duration + (toastCount * 500); // Add 500ms per existing toast
+        
+        // Fade in
+        setTimeout(() => {
+            toast.classList.add('opacity-90');
+        }, 10);
+        
+        // Fade out and remove
+        setTimeout(() => {
+            toast.classList.remove('opacity-90');
+            toast.classList.add('opacity-0');
+            
+            // After fade out, remove the element and reposition other toasts
+            setTimeout(() => {
+                toast.remove();
+                
+                // Reposition remaining toasts
+                repositionToasts();
+            }, 300);
+        }, extendedDuration);
+    }
+    
+    // Function to reposition toasts after one is removed
+    function repositionToasts() {
+        const toasts = document.querySelectorAll('.toast-notification');
+        toasts.forEach((toast, index) => {
+            const bottomOffset = 16 + (index * 60);
+            toast.style.bottom = bottomOffset + 'px';
+        });
+    }
+
     $(document).ready(function() {
+        // Check if summary exists for today
+        let summaryExists = {{ has_summary|tojson }};
+        
         // Handle Quick Add button clicks
         $(document).on('click', '.quick-add-btn', function(e) {
             e.preventDefault();
@@ -29,11 +82,15 @@
                 data: { food_id: foodId },
                 success: function(response) {
                     if (response.success) {
-                        updateTodaysLog(response.log_entry);
-                        updateTotals(response.totals);
-                        
-                        // Show success message
-                        showToast('✅ Food added!');
+                        if (!summaryExists) {
+                            updateTodaysLog(response.log_entry);
+                            updateTotals(response.totals);
+                            // Show success message for normal case
+                            showToast('✅ Food added!');
+                        } else {
+                            // If summary exists, only show the detailed message
+                            showToast('✅ Food added! Refresh to see updated totals or save a new summary.');
+                        }
                     }
                 },
                 complete: function() {
@@ -70,8 +127,15 @@
                     data: $(this).serialize(),
                     success: function(response) {
                         if (response.success) {
-                            updateTodaysLog(response.log_entry);
-                            updateTotals(response.totals);
+                            if (!summaryExists) {
+                                updateTodaysLog(response.log_entry);
+                                updateTotals(response.totals);
+                                // Show success message for normal case
+                                showToast('✅ Food added!');
+                            } else {
+                                // If summary exists, only show the detailed message
+                                showToast('✅ Food added! Refresh to see updated totals or save a new summary.');
+                            }
                             $('#addFoodForm')[0].reset();
                         }
                     }
@@ -91,6 +155,48 @@
                         $('tr[data-log-id="' + logId + '"]').remove();
                         updateTotals(response.totals);
                     }
+                }
+            });
+        });
+        
+        // Handle Save Summary button click
+        $('#saveSummaryBtn').click(function() {
+            const $button = $(this);
+            
+            // Prevent multiple clicks
+            if ($button.hasClass('processing')) {
+                return;
+            }
+            
+            // Add processing state
+            $button.addClass('processing').prop('disabled', true);
+            $button.html('<i class="fas fa-spinner fa-spin mr-2"></i> Processing...');
+            
+            $.ajax({
+                url: "{{ url_for('save_summary') }}",
+                type: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        showToast('✅ ' + response.message);
+                        
+                        // Update UI to show summary saved state
+                        summaryExists = true;
+                        $('#todaysLogSection').hide();
+                        $('#summaryExistsMessage').show();
+                    }
+                },
+                error: function() {
+                    showToast('❌ Error saving summary. Please try again.');
+                },
+                complete: function() {
+                    // Remove processing state after a short delay
+                    setTimeout(function() {
+                        $button.removeClass('processing').prop('disabled', false);
+                        $button.html('Update Daily Summary');
+                    }, 500);
                 }
             });
         });
@@ -193,6 +299,21 @@
         transform: scale(0.95);
         opacity: 0.9;
     }
+    
+    /* Toast notification styles */
+    .toast-notification {
+        opacity: 0;
+        transition: all 0.3s ease;
+        max-width: 80%;
+        word-wrap: break-word;
+        pointer-events: none;
+    }
+    
+    /* Button processing state */
+    button.processing {
+        opacity: 0.8;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
@@ -287,8 +408,23 @@
             });
         </script>
 
-        
-        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        {% if has_summary %}
+        <!-- Message when summary exists -->
+        <div id="summaryExistsMessage" class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold">Today's Summary</h2>
+                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
+            </div>
+            <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't appear here until you save a new summary.</p>
+            <div class="mt-4">
+                <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
+                <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
+            </div>
+            <button id="saveSummaryBtn" class="mt-4 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Update Daily Summary</button>
+        </div>
+        {% else %}
+        <!-- Today's Log section -->
+        <div id="todaysLogSection" class="mt-8 bg-white p-6 rounded-lg shadow-md">
             <h2 class="text-xl font-bold mb-4">Today's Log</h2>
             <table class="w-full">
                 <thead>
@@ -316,10 +452,9 @@
                 <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
                 <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
             </div>
-            <form action="{{ url_for('save_summary') }}" method="post" class="mt-4">
-                <button type="submit" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
-            </form>
-
+            <button id="saveSummaryBtn" class="mt-4 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
