@@ -1,18 +1,280 @@
 /* Variables to match Tailwind's design system */
 :root {
+    /* Colors */
     --primary: #3b82f6;
     --primary-hover: #2563eb;
     --error: #ef4444;
+    --error-hover: #dc2626;
     --success: #10b981;
+    --success-hover: #059669;
     --warning: #f59e0b;
+    --purple: #8b5cf6;
+    --purple-hover: #7c3aed;
+    
+    /* Grays */
     --gray-50: #f9fafb;
     --gray-100: #f3f4f6;
     --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
     --gray-700: #374151;
     --gray-800: #1f2937;
+    --gray-900: #111827;
+
+    /* Theme Colors */
+    --blue-50: #eff6ff;
+    --blue-700: #1d4ed8;
+    --teal-50: #f0fdfa;
+    --teal-700: #0f766e;
+    --orange-50: #fff7ed;
+    --orange-700: #c2410c;
+
+    /* Layout */
     --radius: 0.375rem;
+    --radius-lg: 0.5rem;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+/* Common Card Styles */
+.card-base {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.dashboard-card,
+.history-card,
+.error-container {
+    composes: card-base;
+}
+
+/* Common Title Styles */
+.title-base {
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.page-title,
+.history-title {
+    composes: title-base;
+    font-size: 1.5rem;  /* text-2xl */
+}
+
+.dashboard-title,
+.section-title {
+    composes: title-base;
+    font-size: 1.25rem;  /* text-xl */
+}
+
+/* Button Base Styles */
+.button-base {
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+}
+
+/* Primary Button Variants */
+.button-primary {
+    composes: button-base;
+    background-color: var(--primary);
+    color: white;
+}
+
+.button-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.button-home,
+.button-edit,
+.button-update {
+    composes: button-primary;
+}
+
+/* Success Button Variants */
+.button-success {
+    composes: button-base;
+    background-color: var(--success);
+    color: white;
+}
+
+.button-success:hover {
+    background-color: var(--success-hover);
+}
+
+.button-add,
+.button-export {
+    composes: button-success;
+}
+
+/* Error Button Variants */
+.button-error {
+    composes: button-base;
+    background-color: var(--error);
+    color: white;
+}
+
+.button-error:hover {
+    background-color: var(--error-hover);
+}
+
+.button-remove,
+.delete-button {
+    composes: button-error;
+}
+
+/* Stats Card Base */
+.stats-card {
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.stats-card-base {
+    composes: stats-card;
+}
+
+.stats-card-calories {
+    composes: stats-card-base;
+    background-color: var(--blue-50);
+}
+
+.stats-card-calories h3 {
+    color: var(--blue-700);
+}
+
+.stats-card-protein {
+    composes: stats-card-base;
+    background-color: var(--teal-50);
+}
+
+.stats-card-protein h3 {
+    color: var(--teal-700);
+}
+
+.stats-card-weight {
+    composes: stats-card-base;
+    background-color: var(--orange-50);
+}
+
+.stats-card-weight h3 {
+    color: var(--orange-700);
+}
+
+/* Table Base Styles */
+.table-base {
+    width: 100%;
+}
+
+.table-base th,
+.table-base td {
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.table-base thead tr {
+    background-color: var(--gray-200);
+}
+
+.summary-table,
+.history-table,
+.log-table {
+    composes: table-base;
+}
+
+/* Progress Bar Styles */
+.progress-base {
+    width: 100%;
+    height: 8px;
+    background-color: var(--gray-200);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 4px 0;
+}
+
+.progress-bar,
+.progress-container {
+    composes: progress-base;
+}
+
+.progress-fill-base {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-fill {
+    composes: progress-fill-base;
+}
+
+.progress-fill-calories {
+    background-color: var(--primary);
+}
+
+.progress-fill-calories.over-limit {
+    background-color: var(--error);
+}
+
+.progress-fill-protein {
+    background-color: var(--success);
+}
+
+/* Navigation Styles */
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+}
+
+/* Form Styles */
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-700);
+    margin-bottom: 0.25rem;
+}
+
+.time-selector {
+    background-color: var(--gray-50);
+    border: 1px solid var(--gray-300);
+    color: var(--gray-900);
+    font-size: 0.875rem;
+    border-radius: var(--radius-lg);
+}
+
+/* Responsive Styles */
+@media (max-width: 767px) {
+    .summary-table .summary-column {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+@media (min-width: 768px) {
+    .summary-table .summary-column {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    
+    .navbar-stats {
+        display: flex;
+        gap: 2rem;
+    }
+    
+    .navbar-mobile-stats {
+        display: none;
+    }
 }
 
 /* Core layout styles */
@@ -28,60 +290,32 @@
     background-color: var(--primary-hover);
 }
 
-/* Navigation styles */
-.nav-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    height: 2.5rem;
-    padding: 0.5rem 1rem;
-}
-
-.nav-link:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--primary);
-}
-
-.nav-link:disabled {
-    pointer-events: none;
-    opacity: 0.5;
-}
-
-#mobile-menu-button:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--primary);
-}
-
 /* Table styles */
 .summary-table-container {
     overflow-x: auto;
-}
-
-.summary-table {
+  }
+  
+  .summary-table {
     width: 100%;
     table-layout: auto;
-}
-
-.summary-table th,
-.summary-table td {
+  }
+  
+  .summary-table th,
+  .summary-table td {
     padding: 0.5rem;
     text-align: left;
-}
-
-.summary-table .date-column {
+  }
+  
+  .summary-table .date-column {
     width: 100px;
     white-space: nowrap;
-}
-
-.summary-table .summary-column {
+  }
+  
+  .summary-table .summary-column {
     width: auto;
     min-width: 200px;
-}
-
+  }
+  
 /* Dashboard specific styles */
 .summary-card {
     transition: transform 0.2s ease;
@@ -97,7 +331,7 @@
 
 .food-item:hover {
     background-color: var(--gray-100);
-}
+  }
 
 .quick-add-btn {
     transition: all 0.2s ease;
@@ -135,8 +369,8 @@ button.processing {
 
 .error-message {
     color: var(--error);
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .input-success {
@@ -144,36 +378,36 @@ button.processing {
 }
 
 .settings-form-changed {
-    background-color: #f0f9ff;
-    transition: background-color 0.3s ease;
+  background-color: #f0f9ff;
+  transition: background-color 0.3s ease;
 }
 
 /* Progress bar styles */
 .progress-bar {
     width: 100%;
-    height: 8px;
+  height: 8px;
     background-color: #e5e7eb;
-    border-radius: 4px;
-    overflow: hidden;
+  border-radius: 4px;
+  overflow: hidden;
     margin: 4px 0;
 }
 
 .progress-fill {
-    height: 100%;
+  height: 100%;
     border-radius: 4px;
     transition: width 0.3s ease;
 }
 
 .progress-fill-calories {
-    background-color: #3b82f6;  /* blue-500 */
+    background-color: var(--primary);
 }
 
 .progress-fill-calories.over-limit {
-    background-color: #ef4444;  /* red-500 */
+    background-color: var(--error);
 }
 
 .progress-fill-protein {
-    background-color: #10b981;  /* green-500 */
+    background-color: var(--success);
 }
 
 /* Responsive styles */
@@ -191,4 +425,259 @@ button.processing {
         overflow: visible;
         text-overflow: clip;
     }
+}
+
+/* Navbar Progress Bars */
+.progress-container {
+    width: 100%;
+    height: 0.5rem;  /* 8px */
+    background-color: #e5e7eb;  /* bg-gray-200 */
+    border-radius: 9999px;  /* rounded-full */
+    margin-top: 0.25rem;  /* mt-1 */
+}
+
+.progress-bar-calories {
+    height: 100%;
+    background-color: #3b82f6;  /* bg-blue-500 */
+    border-radius: 9999px;
+    transition: width 300ms;
+}
+
+.progress-bar-protein {
+    height: 100%;
+    background-color: #10b981;  /* bg-green-500 */
+    border-radius: 9999px;
+    transition: width 300ms;
+}
+
+/* Navbar Layout */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: white;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    z-index: 50;
+}
+
+.navbar-stats {
+    display: none;
+}
+
+.navbar-mobile-stats {
+    border-top: 1px solid #e5e7eb;  /* border-t border-gray-200 */
+    padding: 0.5rem 0;  /* py-2 */
+}
+
+@media (min-width: 768px) {
+    .navbar-stats {
+        display: flex;
+        gap: 2rem;  /* gap-8 */
+    }
+    
+    .navbar-mobile-stats {
+        display: none;
+    }
+}
+
+/* Mobile Menu Styles */
+.mobile-menu {
+    display: none;
+}
+
+.mobile-menu.active {
+    display: block;
+}
+
+.mobile-menu-link {
+    display: block;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.mobile-menu-link.active {
+    color: var(--primary);
+    border-left: 4px solid var(--primary);
+    background-color: #f9fafb;  /* bg-gray-50 */
+}
+
+/* Dashboard Cards */
+.dashboard-card {
+    background-color: white;
+    padding: 1.5rem;  /* p-6 */
+    border-radius: 0.5rem;  /* rounded-lg */
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);  /* shadow-md */
+}
+
+.dashboard-title {
+    font-size: 1.25rem;  /* text-xl */
+    font-weight: 700;  /* font-bold */
+    margin-bottom: 1rem;  /* mb-4 */
+}
+
+/* Quick Add Buttons */
+.quick-add-button {
+    background-color: #f3f4f6;  /* bg-gray-100 */
+    color: #374151;  /* text-gray-700 */
+    border: 2px solid #3b82f6;  /* border-2 border-blue-500 */
+    border-radius: 0.375rem;  /* rounded-md */
+}
+
+.quick-add-button:hover {
+    background-color: #3b82f6;  /* bg-blue-500 */
+    color: white;
+}
+
+/* Action Buttons */
+.action-button-green {
+    background-color: #f3f4f6;  /* bg-gray-100 */
+    color: #374151;  /* text-gray-700 */
+    border: 2px solid #10b981;  /* border-2 border-green-500 */
+}
+
+.action-button-green:hover {
+    background-color: #10b981;  /* bg-green-500 */
+    color: white;
+}
+
+.action-button-blue {
+    background-color: #f3f4f6;  /* bg-gray-100 */
+    color: #374151;  /* text-gray-700 */
+    border: 2px solid #3b82f6;  /* border-2 border-blue-500 */
+}
+
+.action-button-blue:hover {
+    background-color: #3b82f6;  /* bg-blue-500 */
+    color: white;
+}
+
+/* Table Styles */
+.log-table {
+    width: 100%;
+}
+
+.log-table thead tr {
+    background-color: #e5e7eb;  /* bg-gray-200 */
+}
+
+.log-table th,
+.log-table td {
+    padding: 0.5rem;  /* p-2 */
+    text-align: left;
+}
+
+/* Delete Button */
+.delete-button {
+    background-color: #ef4444;  /* bg-red-500 */
+    color: white;
+    border-radius: 0.375rem;  /* rounded-md */
+}
+
+.delete-button:hover {
+    background-color: #dc2626;  /* bg-red-600 */
+}
+
+/* Summary Button */
+.summary-button {
+    background-color: #8b5cf6;  /* bg-purple-500 */
+    color: white;
+    border-radius: 0.375rem;  /* rounded-md */
+}
+
+.summary-button:hover {
+    background-color: #7c3aed;  /* bg-purple-600 */
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 1rem;  /* p-4 */
+    background-color: #f9fafb;  /* bg-gray-50 */
+    border: 1px dashed #d1d5db;  /* border border-dashed border-gray-300 */
+    border-radius: 0.375rem;  /* rounded-md */
+    color: #4b5563;  /* text-gray-600 */
+}
+
+/* Edit History Page */
+.section-title {
+    font-size: 1.25rem;  /* text-xl */
+    font-weight: 600;  /* font-semibold */
+    margin-bottom: 1rem;  /* mb-4 */
+}
+
+/* Stats Cards */
+.stats-card {
+    padding: 1rem;  /* p-4 */
+    border-radius: 0.5rem;  /* rounded-lg */
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);  /* shadow-sm */
+}
+
+.stats-card-calories {
+    background-color: #eff6ff;  /* bg-blue-50 */
+}
+
+.stats-card-calories h3 {
+    color: #1d4ed8;  /* text-blue-700 */
+}
+
+.stats-card-protein {
+    background-color: #f0fdfa;  /* bg-teal-50 */
+}
+
+.stats-card-protein h3 {
+    color: #0f766e;  /* text-teal-700 */
+}
+
+.stats-card-weight {
+    background-color: #fff7ed;  /* bg-orange-50 */
+}
+
+.stats-card-weight h3 {
+    color: #c2410c;  /* text-orange-700 */
+}
+
+.stats-title {
+    font-size: 1.125rem;  /* text-lg */
+    font-weight: 600;  /* font-semibold */
+    margin-bottom: 0.5rem;  /* mb-2 */
+}
+
+.stats-label {
+    font-size: 0.875rem;  /* text-sm */
+    color: #4b5563;  /* text-gray-600 */
+}
+
+.stats-value {
+    font-size: 1.5rem;  /* text-2xl */
+    font-weight: 700;  /* font-bold */
+}
+
+/* Action Buttons */
+.button-export {
+    background-color: #10b981;  /* bg-green-500 */
+    color: white;
+    border-radius: 0.375rem;  /* rounded-md */
+}
+
+.button-export:hover {
+    background-color: #059669;  /* bg-green-600 */
+}
+
+.button-edit {
+    background-color: #3b82f6;  /* bg-blue-500 */
+    color: white;
+    border-radius: 0.375rem;  /* rounded-md */
+}
+
+.button-edit:hover {
+    background-color: #2563eb;  /* bg-blue-600 */
+}
+
+/* Time Range Selector */
+.time-selector:focus {
+    ring: 2px solid #3b82f6;  /* focus:ring-blue-500 */
+    border-color: #3b82f6;  /* focus:border-blue-500 */
 }

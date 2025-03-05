@@ -33,32 +33,32 @@
 <div class="pt-32 md:pt-20">
     <div class="container mx-auto p-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h2 class="text-xl font-bold mb-4">Add Food</h2>
+            <div class="dashboard-card">
+                <h2 class="dashboard-title">Add Food</h2>
                 <form id="addFoodForm" action="" method="post" class="space-y-4">
                     <input type="text" name="name" placeholder="Food Name" required class="w-full px-4 py-2 border rounded-md">
                     <input type="number" name="calories" placeholder="Calories" required class="w-full px-4 py-2 border rounded-md">
                     <input type="number" name="protein" placeholder="Protein (g)" required class="w-full px-4 py-2 border rounded-md">
                     <input type="number" name="servings" placeholder="Servings" value="1" min="0.1" step="0.1" required class="w-full px-4 py-2 border rounded-md">
                     <div class="flex space-x-2">
-                        <button type="submit" onclick="setFormAction('{{ url_for('quick_add_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-green-500 hover:text-white border-2 border-green-500">Add to Quick Add</button>
-                        <button type="submit" onclick="setFormAction('{{ url_for('log_food') }}')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-blue-500 border-2 border-blue-500 hover:text-white">Log Food</button>
+                        <button type="submit" onclick="setFormAction('{{ url_for('quick_add_food') }}')" class="flex-1 py-2 action-button-green">Add to Quick Add</button>
+                        <button type="submit" onclick="setFormAction('{{ url_for('log_food') }}')" class="flex-1 py-2 action-button-blue">Log Food</button>
                     </div>
                 </form>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h2 class="text-xl font-bold mb-4">Quick Add</h2>
+            <div class="dashboard-card">
+                <h2 class="dashboard-title">Quick Add</h2>
                 <div class="quick-add-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {% if foods %}
                         {% for food in foods %}
-                        <button type="button" class="quick-add-btn w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="{{ food[0] }}">
+                        <button type="button" class="quick-add-button w-full py-2 px-4 text-sm" data-food-id="{{ food[0] }}">
                             {{ food[1] }}
                         </button>
                         {% endfor %}
                     {% else %}
-                        <div class="col-span-full text-center p-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
-                            <p class="text-gray-600">Create shortcuts for your most common foods using the Add to Quick Add button</p>
+                        <div class="col-span-full empty-state">
+                            <p>Create shortcuts for your most common foods using the Add to Quick Add button</p>
                         </div>
                     {% endif %}
                 </div>
@@ -66,8 +66,8 @@
         </div>
 
         <!-- Recommendations to hit your goals -->    
-        <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-bold mb-4">Food Recommendations -- What to eat to hit your goals</h2>
+        <div class="mt-8 dashboard-card">
+            <h2 class="dashboard-title">Food Recommendations -- What to eat to hit your goals</h2>
             <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
                 Show Recommendations
             </button>
@@ -94,9 +94,9 @@
 
         {% if has_summary %}
         <!-- Message when summary exists -->
-        <div id="summaryExistsMessage" class="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <div id="summaryExistsMessage" class="mt-8 dashboard-card">
             <div class="flex items-center justify-between">
-                <h2 class="text-xl font-bold">Today's Summary</h2>
+                <h2 class="dashboard-title">Today's Summary</h2>
                 <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
             </div>
             <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't appear here until you save a new summary.</p>
@@ -104,13 +104,13 @@
                 <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
                 <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
             </div>
-            <button id="saveSummaryBtn" class="mt-4 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Update Daily Summary</button>
+            <button id="saveSummaryBtn" class="mt-4 summary-button py-2 px-4">Update Daily Summary</button>
         </div>
         {% else %}
         <!-- Today's Log section -->
-        <div id="todaysLogSection" class="mt-8 bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-bold mb-4">Today's Log</h2>
-            <table class="w-full">
+        <div id="todaysLogSection" class="mt-8 dashboard-card">
+            <h2 class="dashboard-title">Today's Log</h2>
+            <table class="log-table">
                 <thead>
                     <tr class="bg-gray-200">
                         <th class="p-2 text-left">Food</th>
@@ -126,7 +126,9 @@
                         <td class="p-2">{{ log[2] }}</td>
                         <td class="p-2">{{ log[3] }}g</td>
                         <td class="p-2">
-                            <button class="remove-food-btn bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="{{ log[0] }}"><i class="fas fa-trash"></i></button>
+                            <button class="delete-button py-1 px-2" data-log-id="{{ log[0] }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -136,7 +138,7 @@
                 <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
                 <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
             </div>
-            <button id="saveSummaryBtn" class="mt-4 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600">Save Daily Summary</button>
+            <button id="saveSummaryBtn" class="mt-4 summary-button py-2 px-4">Save Daily Summary</button>
         </div>
         {% endif %}
     </div>

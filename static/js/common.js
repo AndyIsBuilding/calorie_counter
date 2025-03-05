@@ -111,4 +111,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Not a JSON response or doesn't have toast property
         }
     });
+
+    // Set up progress bars
+    document.querySelectorAll('.progress-bar-calories, .progress-bar-protein').forEach(bar => {
+        const percentage = bar.dataset.percentage;
+        bar.style.width = `${percentage}%`;
+    });
 });

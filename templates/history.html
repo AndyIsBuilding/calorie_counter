@@ -36,13 +36,13 @@
 <div class="pt-32 md:pt-20">
     <div class="container mx-auto p-4">
         <!-- Trends Section -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <div class="history-card mb-8">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <h2 class="text-2xl font-bold">Trends</h2>
+                <h2 class="history-title">Trends</h2>
                 
                 <!-- Time Range Selector -->
                 <div class="mt-4 sm:mt-0">
-                    <select id="timeRangeSelector" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                    <select id="timeRangeSelector" class="time-selector block w-full p-2.5">
                         <option value="7">Last 7 Days</option>
                         <option value="14">Last 14 Days</option>
                         <option value="30" selected>Last 30 Days</option>
@@ -57,46 +57,46 @@
             {% if chart_dates %}
             <!-- Summary Stats -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div class="bg-blue-50 p-4 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-semibold text-blue-700 mb-2">Calories</h3>
+                <div class="stats-card stats-card-calories">
+                    <h3 class="stats-title">Calories</h3>
                     <div class="flex justify-between">
                         <div>
-                            <p class="text-sm text-gray-600">Average Daily</p>
-                            <p class="text-2xl font-bold" id="avgCalories">-</p>
+                            <p class="stats-label">Average Daily</p>
+                            <p class="stats-value" id="avgCalories">-</p>
                         </div>
                         <div>
-                            <p class="text-sm text-gray-600">Goal</p>
-                            <p class="text-2xl font-bold" id="calorieGoal">-</p>
+                            <p class="stats-label">Goal</p>
+                            <p class="stats-value" id="calorieGoal">-</p>
                         </div>
                     </div>
                 </div>
                 
-                <div class="bg-teal-50 p-4 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-semibold text-teal-700 mb-2">Protein</h3>
+                <div class="stats-card stats-card-protein">
+                    <h3 class="stats-title">Protein</h3>
                     <div class="flex justify-between">
                         <div>
-                            <p class="text-sm text-gray-600">Average Daily</p>
-                            <p class="text-2xl font-bold" id="avgProtein">-</p>
+                            <p class="stats-label">Average Daily</p>
+                            <p class="stats-value" id="avgProtein">-</p>
                         </div>
                         <div>
-                            <p class="text-sm text-gray-600">Goal</p>
-                            <p class="text-2xl font-bold" id="proteinGoal">-</p>
+                            <p class="stats-label">Goal</p>
+                            <p class="stats-value" id="proteinGoal">-</p>
                         </div>
                     </div>
                 </div>
                 
                 {% if weights|length > 0 %}
-                <div class="bg-orange-50 p-4 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-semibold text-orange-700 mb-2">Weight</h3>
+                <div class="stats-card stats-card-weight">
+                    <h3 class="stats-title">Weight</h3>
                     <div class="flex justify-between">
                         <div>
-                            <p class="text-sm text-gray-600">Latest</p>
-                            <p class="text-2xl font-bold" id="latestWeight">-</p>
+                            <p class="stats-label">Latest</p>
+                            <p class="stats-value" id="latestWeight">-</p>
                         </div>
                         {% if weight_goal %}
                         <div>
-                            <p class="text-sm text-gray-600">Goal</p>
-                            <p class="text-2xl font-bold">{{ weight_goal|round(1) }} {{ weight_unit }}</p>
+                            <p class="stats-label">Goal</p>
+                            <p class="stats-value">{{ weight_goal|round(1) }} {{ weight_unit }}</p>
                         </div>
                         {% endif %}
                     </div>
@@ -104,32 +104,29 @@
                 {% endif %}
             </div>
             
-            <!-- Calorie Chart -->
+            <!-- Charts -->
             <div class="mb-8">
-                <h3 class="text-xl font-semibold mb-4">Calorie Intake vs Goal</h3>
+                <h3 class="section-title">Calorie Intake vs Goal</h3>
                 <div class="h-80">
                     <canvas id="calorieChart"></canvas>
                 </div>
             </div>
             
-            <!-- Protein Chart -->
             <div class="mb-8">
-                <h3 class="text-xl font-semibold mb-4">Protein Intake vs Goal</h3>
+                <h3 class="section-title">Protein Intake vs Goal</h3>
                 <div class="h-80">
                     <canvas id="proteinChart"></canvas>
                 </div>
             </div>
             
-            <!-- Weight Chart (only show if there's weight data) -->
             {% if weights|length > 0 %}
             <div class="mb-8">
-                <h3 class="text-xl font-semibold mb-4">Weight Tracking {% if weight_goal %}vs Goal{% endif %}</h3>
+                <h3 class="section-title">Weight Tracking {% if weight_goal %}vs Goal{% endif %}</h3>
                 <div class="h-80">
                     <canvas id="weightChart"></canvas>
                 </div>
             </div>
             {% endif %}
-            
             
             {% else %}
             <p class="text-gray-600 italic">No data available for charts. Start logging your nutrition to see trends!</p>
@@ -137,12 +134,12 @@
         </div>
 
         <!-- Historical Data Section -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
+        <div class="history-card">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <h2 class="text-2xl font-bold mb-4 sm:mb-0">Historical Data</h2>
+                <h2 class="history-title mb-4 sm:mb-0">Historical Data</h2>
                 <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <a href="#" onclick="window.location.href=URLS.exportCsv" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 text-center">Export to CSV</a>
-                    <a href="#" onclick="window.location.href=URLS.editHistory" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 text-center">Edit Previous Days</a>
+                    <a href="#" onclick="window.location.href=URLS.exportCsv" class="button-export py-2 px-4 text-center">Export to CSV</a>
+                    <a href="#" onclick="window.location.href=URLS.editHistory" class="button-edit py-2 px-4 text-center">Edit Previous Days</a>
                 </div>
             </div>
             

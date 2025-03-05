@@ -1,6 +1,6 @@
 {% if request.endpoint == 'dashboard' %}
 <!-- Dashboard Navbar with Stats -->
-<nav class="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
+<nav class="navbar">
     <div class="container mx-auto px-4">
         <!-- Top bar with logo and menu button -->
         <div class="flex items-center justify-between h-16">
@@ -8,7 +8,7 @@
             <div class="text-xl font-bold text-primary">HealthVibe</div>
 
             <!-- Nutrition Stats - Hidden on mobile -->
-            <div class="hidden md:flex gap-8">
+            <div class="navbar-stats">
                 <div>
                     <div class="text-sm text-gray-600">Calories</div>
                     <div class="text-xl font-bold">
@@ -17,9 +17,11 @@
                             {{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set calorie_percentage = ((total_calories/current_user.calorie_goal * 100)|round) if total_calories <= current_user.calorie_goal else 100 %}
-                        <div id="calorie-progress" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: {{ calorie_percentage }}%"></div>
+                    <div class="progress-container">
+                        <div id="calorie-progress" 
+                             class="progress-bar-calories" 
+                             data-percentage="{{ ((total_calories/current_user.calorie_goal * 100)|round) if total_calories <= current_user.calorie_goal else 100 }}">
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -30,9 +32,11 @@
                             {{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set protein_percentage = ((total_protein/current_user.protein_goal * 100)|round) if total_protein <= current_user.protein_goal else 100 %}
-                        <div id="protein-progress" class="h-full bg-green-500 rounded-full transition-all duration-300" style="width: {{ protein_percentage }}%"></div>
+                    <div class="progress-container">
+                        <div id="protein-progress" 
+                             class="progress-bar-protein" 
+                             data-percentage="{{ ((total_protein/current_user.protein_goal * 100)|round) if total_protein <= current_user.protein_goal else 100 }}">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -55,7 +59,7 @@
         </div>
 
         <!-- Mobile Stats Bar - Always visible on mobile -->
-        <div class="md:hidden border-t border-gray-200 py-2">
+        <div class="navbar-mobile-stats md:hidden">
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <div class="text-sm text-gray-600">Calories</div>
@@ -65,9 +69,11 @@
                             {{ ((total_calories/current_user.calorie_goal * 100)|round|int) if current_user.calorie_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set calorie_percentage = ((total_calories/current_user.calorie_goal * 100)|round) if total_calories <= current_user.calorie_goal else 100 %}
-                        <div id="mobile-calorie-progress" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: {{ calorie_percentage }}%"></div>
+                    <div class="progress-container">
+                        <div id="mobile-calorie-progress" 
+                             class="progress-bar-calories" 
+                             data-percentage="{{ ((total_calories/current_user.calorie_goal * 100)|round) if total_calories <= current_user.calorie_goal else 100 }}">
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -78,9 +84,11 @@
                             {{ ((total_protein/current_user.protein_goal * 100)|round|int) if current_user.protein_goal > 0 else 0 }}%
                         </span>
                     </div>
-                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        {% set protein_percentage = ((total_protein/current_user.protein_goal * 100)|round) if total_protein <= current_user.protein_goal else 100 %}
-                        <div id="mobile-protein-progress" class="h-full bg-green-500 rounded-full transition-all duration-300" style="width: {{ protein_percentage }}%"></div>
+                    <div class="progress-container">
+                        <div id="mobile-protein-progress" 
+                             class="progress-bar-protein" 
+                             data-percentage="{{ ((total_protein/current_user.protein_goal * 100)|round) if total_protein <= current_user.protein_goal else 100 }}">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -100,7 +108,7 @@
 <div class="mt-16"></div> <!-- Add this line to create space below the navbar -->
 {% else %}
 <!-- Regular Navbar for other pages -->
-<nav class="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
+<nav class="navbar">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center h-16">
             <div class="text-xl font-bold text-primary">HealthVibe</div>
