@@ -42,34 +42,52 @@
     }
   }
 
-.quick-add-btn {
-    transition: all 0.1s ease;
-    background-color: #f3f4f6; /* Light gray background */
-    color: #374151; /* Dark gray text */
-    border: 2px solid #3b82f6; /* Blue border */
+/* Dashboard specific styles */
+.summary-card {
+    transition: transform 0.2s ease;
 }
 
-.quick-add-btn:hover {
-    background-color: #3b82f6; /* Blue background on hover */
-    color: white;
+.summary-card:hover {
+    transform: translateY(-5px);
+}
+
+.food-item {
+    transition: background-color 0.2s ease;
+}
+
+.food-item:hover {
+    background-color: #f3f4f6;
+}
+
+/* Update quick-add-btn styles */
+.quick-add-btn {
+    transition: all 0.2s ease;  /* Use the longer transition time */
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 2px solid #3b82f6;
 }
 
 .quick-add-btn.pressed {
     transform: scale(0.95);
+    opacity: 0.9;
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
-    background-color: #3b82f6; /* Blue background when pressed */
+    background-color: #3b82f6;
     color: white;
 }
 
-/* Remove hover styles for touch devices */
-@media (hover: none) {
-    .quick-add-btn:hover {
-        background-color: #f3f4f6;
-        color: #374151;
-    }
+/* Toast and processing styles */
+.toast-notification {
+    opacity: 0;
+    transition: all 0.3s ease;
+    max-width: 80%;
+    word-wrap: break-word;
+    pointer-events: none;
 }
 
-/* Toast styles are now defined in layout.html */
+button.processing {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
 
 /* Settings page styles */
 .input-error {
