@@ -28,11 +28,23 @@ To run a specific test function:
 pytest tests/test_routes.py::test_index_page
 ```
 
+To run a report with HTML coverage: 
+```bash
+pytest --cov=all -cov-report=html
+```
+
 ## Test Structure
 
 - `conftest.py`: Contains pytest fixtures used across test files
-- `test_routes.py`: Tests for application routes and views
+- `test_auth.py`: Tests for authentication and authorization
+- `test_dashboard_routes.py`: Tests for dashboard routes and views
 - `test_database.py`: Tests for database operations
+- `test_food_logging.py`: Tests for food logging and tracking
+- `test_goals.py`: Tests for goal tracking and management
+- `test_routes.py`: Tests for application routes and views
+- `test_settings_routes.py`: Tests for settings routes and views
+- `test_user_management.py`: Tests for user management
+- `test_utils.py`: Tests for utility functions  
 
 ## Adding New Tests
 

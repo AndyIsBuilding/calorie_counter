@@ -11,6 +11,7 @@ htmlcov/
 *.pyo
 *.pyd
 .Python
+.vscode/
 env/
 build/
 develop-eggs/

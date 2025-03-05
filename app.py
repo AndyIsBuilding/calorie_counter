@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, get_flashed_messages
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, get_flashed_messages, current_app
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
@@ -187,16 +187,24 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    from flask import current_app
+    # Use the shared connection if in testing mode
+    if current_app.config['TESTING']:
+        conn = current_app.config['DB_CONNECTION']
+    else:
+        conn = sqlite3.connect(current_app.config['DB_PATH'])
+        
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
-    conn.close()
+    
+    if not current_app.config['TESTING']:
+        conn.close()
+    
+    # TODO: get rid of this 
     if user:
-        # Check if weight_goal column exists in the result
         weight_goal = user[5] if len(user) > 5 else None
-        # Check if weight_unit column exists in the result
-        weight_unit = user[6] if len(user) > 6 else 0  # Default to kg (0)
+        weight_unit = user[6] if len(user) > 6 else 0
         return User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
     return None
 
@@ -695,48 +703,54 @@ def export_csv():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated: 
+    if current_user.is_authenticated:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'success': True, 'redirect_url': url_for('dashboard')})
-        return redirect(url_for('dashboard')) 
+        return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        conn = sqlite3.connect(app.config['DB_PATH'])
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
-        conn.close()
+
+        conn = current_app.config['DB_CONNECTION'] if current_app.config.get('TESTING') else sqlite3.connect(current_app.config['DB_PATH'])
         
-        if user and check_password_hash(user[2], password):
-            # Get weight_goal and weight_unit if they exist
-            weight_goal = user[5] if len(user) > 5 else None
-            weight_unit = user[6] if len(user) > 6 else 0  # Default to kg (0)
-            user_obj = User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
+        try:
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE username = ?", (username,))
+            user = c.fetchone()
+            
+            # First check if user exists and password matches
+            if user is None or not check_password_hash(user[2], password):
+                # Failed login - wrong username or password
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({
+                        'success': False,
+                        'message': 'Invalid username or password'
+                    }), 401
+                flash('Invalid username or password')
+                return render_template('login.html'), 401
+
+            # If we get here, login is successful
+            user_obj = User(user[0], user[1], user[3], user[4])
             login_user(user_obj)
+            
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
                     'success': True,
                     'redirect_url': url_for('dashboard'),
                     'user': {
-                        'id': user_obj.id,
                         'username': user_obj.username,
                         'calorie_goal': user_obj.calorie_goal,
-                        'protein_goal': user_obj.protein_goal,
-                        'weight_goal': user_obj.weight_goal,
-                        'weight_unit': user_obj.weight_unit
+                        'protein_goal': user_obj.protein_goal
                     }
                 })
             return redirect(url_for('dashboard'))
-        else:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'success': False,
-                    'message': 'Invalid username or password'
-                }), 401
-            flash('Invalid username or password', 'error')
+            
+        finally:
+            if not current_app.config.get('TESTING'):
+                conn.close()
     
+    # GET request
     return render_template('login.html')
 
 @app.route('/logout')

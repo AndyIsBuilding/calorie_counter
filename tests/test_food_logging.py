@@ -20,8 +20,8 @@ def test_log_food_db(app, client, auth):
         protein = 0.5
         
         # Add the food entry directly to the database
-        db_path = app.config['DB_PATH']
-        conn = sqlite3.connect(db_path)
+        # Use the shared connection for the in-memory database
+        conn = app.config['DB_CONNECTION']
         c = conn.cursor()
         today = get_local_date().isoformat()
         
@@ -37,7 +37,7 @@ def test_log_food_db(app, client, auth):
             WHERE date = ? AND food_name = ?
         """, (today, food_name))
         entry = c.fetchone()
-        conn.close()
+        # Don't close the shared connection
         
         assert entry is not None
         assert entry[2] == today
@@ -52,8 +52,8 @@ def test_remove_food_db(app, client, auth):
         auth.login()
         
         # First, add a food entry to delete
-        db_path = app.config['DB_PATH']
-        conn = sqlite3.connect(db_path)
+        # Use the shared connection for the in-memory database
+        conn = app.config['DB_CONNECTION']
         c = conn.cursor()
         today = get_local_date().isoformat()
         food_name = "Test Orange"
@@ -81,7 +81,7 @@ def test_remove_food_db(app, client, auth):
         # Verify the entry was deleted
         c.execute("SELECT * FROM food_log WHERE id = ?", (entry_id,))
         deleted_entry = c.fetchone()
-        conn.close()
+        # Don't close the shared connection
         
         assert deleted_entry is None
 
@@ -92,8 +92,8 @@ def test_update_food_db(app, client, auth):
         auth.login()
         
         # First, add some food entries for a specific date
-        db_path = app.config['DB_PATH']
-        conn = sqlite3.connect(db_path)
+        # Use the shared connection for the in-memory database
+        conn = app.config['DB_CONNECTION']
         c = conn.cursor()
         test_date = '2023-01-01'
         
@@ -134,7 +134,7 @@ def test_update_food_db(app, client, auth):
         new_entry = c.fetchone()
         assert new_entry is not None
         
-        conn.close()
+        # Don't close the shared connection
 
 def test_daily_totals_calculation_db(app, client, auth):
     """Test calculating daily totals directly from the database."""
@@ -143,8 +143,8 @@ def test_daily_totals_calculation_db(app, client, auth):
         auth.login()
         
         # First, clear any existing entries for today
-        db_path = app.config['DB_PATH']
-        conn = sqlite3.connect(db_path)
+        # Use the shared connection for the in-memory database
+        conn = app.config['DB_CONNECTION']
         c = conn.cursor()
         today = get_local_date().isoformat()
         
@@ -176,7 +176,7 @@ def test_daily_totals_calculation_db(app, client, auth):
         c.execute("SELECT SUM(calories), SUM(protein) FROM food_log WHERE date = ? AND user_id = ?", 
                  (today, 1))
         db_totals = c.fetchone()
-        conn.close()
+        # Don't close the shared connection
         
         # Verify the totals match our expectations
         assert db_totals[0] == expected_calories
