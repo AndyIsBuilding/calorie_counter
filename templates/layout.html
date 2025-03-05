@@ -10,129 +10,16 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='calorie_tracking.png') }}" sizes="120x120">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <title>{% block title %}HealthVibe{% endblock %}</title>
     {% block extra_head %}{% endblock %}
 
     <script>
-        // Mobile menu functionality
-        $(document).ready(function() {
-            // Mobile menu toggle
-            $('#mobile-menu-button').click(function(e) {
-                e.stopPropagation();
-                const menuButton = $(this);
-                const mobileMenu = $('#mobile-menu');
-                const isExpanded = menuButton.attr('aria-expanded') === 'true';
-                
-                // Toggle menu
-                mobileMenu.toggleClass('hidden');
-                
-                // Update aria-expanded
-                menuButton.attr('aria-expanded', !isExpanded);
-                
-                // Toggle icons
-                menuButton.find('svg').toggleClass('hidden');
-            });
-
-            // Close mobile menu when clicking outside
-            $(document).click(function(event) {
-                const mobileMenu = $('#mobile-menu');
-                const menuButton = $('#mobile-menu-button');
-                
-                if (!$(event.target).closest('#mobile-menu, #mobile-menu-button').length && !mobileMenu.hasClass('hidden')) {
-                    mobileMenu.addClass('hidden');
-                    menuButton.attr('aria-expanded', 'false');
-                    menuButton.find('svg:first-child').removeClass('hidden');
-                    menuButton.find('svg:last-child').addClass('hidden');
-                }
-            });
-
-            // Process flash messages and display them as toasts
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        showToast('{{ message }}', '{{ category }}');
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-            
-            // Set up AJAX to handle toast responses
-            $(document).ajaxSuccess(function(event, xhr, settings) {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.toast) {
-                        showToast(response.toast.message, response.toast.category);
-                        
-                        // Handle redirect if provided
-                        if (response.redirect) {
-                            setTimeout(function() {
-                                window.location.href = response.redirect;
-                            }, 1000); // Delay redirect to allow toast to be seen
-                        }
-                    }
-                } catch (e) {
-                    // Not a JSON response or doesn't have toast property
-                }
-            });
-        });
-
-        // Global toast function
-        function showToast(message, type = 'success') {
-            // Create toast element
-            const toast = document.createElement('div');
-            
-            // Set toast classes based on type
-            let bgColor = 'bg-green-500';
-            if (type === 'error') {
-                bgColor = 'bg-red-500';
-            } else if (type === 'warning') {
-                bgColor = 'bg-yellow-500';
-            } else if (type === 'info') {
-                bgColor = 'bg-blue-500';
-            }
-            
-            toast.className = `toast fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-md shadow-lg z-50 opacity-0 transition-opacity duration-300`;
-            toast.textContent = message;
-            
-            // Add toast to container
-            document.getElementById('toast-container').appendChild(toast);
-            
-            // Show toast
-            setTimeout(() => {
-                toast.classList.add('opacity-100');
-                
-                // Hide and remove toast after delay
-                setTimeout(() => {
-                    toast.classList.remove('opacity-100');
-                    setTimeout(() => {
-                        toast.remove();
-                    }, 300);
-                }, 3000);
-            }, 100);
-        }
+        const COMMON_STATE = {
+            flashMessages: {{ get_flashed_messages(with_categories=true)|tojson|safe }}
+        };
     </script>
-    <style>
-        /* Add any custom styles here */
-        .bg-primary {
-            background-color: #3b82f6;
-        }
-        .text-primary {
-            color: #3b82f6;
-        }
-        .hover\:bg-primary:hover {
-            background-color: #2563eb;
-        }
-        
-        /* Navigation styles */
-        .nav-link {
-            @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2;
-        }
-        
-        /* Mobile menu button styles */
-        #mobile-menu-button:focus {
-            @apply outline-none ring-2 ring-blue-500;
-        }
-    </style>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     {% block navbar %}{% endblock %}
@@ -142,7 +29,7 @@
     </main>
 
     <!-- Toast container -->
-    <div id="toast-container"></div>
+    <div id="toast-container" class="fixed bottom-0 right-0 p-4 z-50"></div>
 
     <script>
         // Register service worker

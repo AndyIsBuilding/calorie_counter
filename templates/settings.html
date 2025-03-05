@@ -2,29 +2,28 @@
 
 {% block extra_head %} 
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<style>
-    .progress-bar {
-        width: 100%;
-        height: 8px;
-        background-color: #e5e7eb;
-        border-radius: 4px;
-        overflow: hidden;
-        margin: 4px 0;
-    }
-    .progress-fill {
-        height: 100%;
-        border-radius: 4px;
-        transition: width 0.3s ease;
-    }
-    .input-error {
-        border-color: #ef4444 !important;
-    }
-    .error-message {
-        color: #ef4444;
-        font-size: 0.75rem;
-        margin-top: 0.25rem;
-    }
-</style>
+
+<!-- Define URLs and initial state -->
+<script>
+    const URLS = {
+        updateSettings: "{{ url_for('update_settings') }}",
+        removeQuickAddFood: "{{ url_for('remove_quick_add_food') }}",
+        dashboard: "{{ url_for('dashboard') }}"
+    };
+    
+    const INITIAL_STATE = {
+        successMessage: {{ success_message|tojson|safe if success_message else 'null' }},
+        weightUnit: {{ current_user.weight_unit|tojson }},
+        weightGoal: {{ current_user.weight_goal|tojson if current_user.weight_goal else 'null' }},
+        calorieGoal: {{ calorie_goal|tojson }},
+        proteinGoal: {{ protein_goal|tojson }},
+        foods: {{ foods|tojson if foods else '[]' }},
+        ajaxOnly: {{ ajax_only|tojson if ajax_only else 'false' }}
+    };
+</script>
+
+<!-- Load settings.js after defining state -->
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock extra_head %} 
 
 {% block navbar %}
@@ -47,19 +46,12 @@
                         <span class="text-gray-600">{{ today_calories }} / {{ calorie_goal }}</span>
                     </div>
                     <div class="progress-bar">
-                        {% set calorie_percentage = ((today_calories/calorie_goal * 100)|round) if calorie_goal > 0 else 0 %}
-                        {% if calorie_percentage > 100 %}
-                            <div class="progress-fill" style="width: 100%; background-color: #ef4444;"></div>
-                        {% else %}
-                            <div class="progress-fill" style="width: {{ calorie_percentage }}%; background-color: #3b82f6;"></div> 
-                        {% endif %}
+                        <div class="progress-fill progress-fill-calories" data-percentage="{{ (today_calories/calorie_goal * 100)|round if calorie_goal > 0 else 0 }}"></div>
                     </div>
                     <div class="text-right text-xs text-gray-500 mt-1">
-                        {% if today_calories > calorie_goal %}
-                            <span class="text-red-500">{{ calorie_percentage }}%</span>
-                        {% else %}
-                            <span>{{ calorie_percentage }}%</span>
-                        {% endif %}
+                        <span class="{% if today_calories > calorie_goal %}text-red-500{% endif %}">
+                            {{ (today_calories/calorie_goal * 100)|round if calorie_goal > 0 else 0 }}%
+                        </span>
                     </div>
                 </div>
                 
@@ -70,19 +62,12 @@
                         <span class="text-gray-600">{{ today_protein }}g / {{ protein_goal }}g</span>
                     </div>
                     <div class="progress-bar">
-                        {% set protein_percentage = ((today_protein/protein_goal * 100)|round) if protein_goal > 0 else 0 %}
-                        {% if protein_percentage > 100 %}
-                            <div class="progress-fill" style="width: 100%; background-color: #10b981;"></div>
-                        {% else %}
-                            <div class="progress-fill" style="width: {{ protein_percentage }}%; background-color: #10b981;"></div>
-                        {% endif %}
+                        <div class="progress-fill progress-fill-protein" data-percentage="{{ (today_protein/protein_goal * 100)|round if protein_goal > 0 else 0 }}"></div>
                     </div>
                     <div class="text-right text-xs text-gray-500 mt-1">
-                        {% if today_protein > protein_goal %}
-                            <span class="text-green-600 font-medium">{{ protein_percentage }}%</span>
-                        {% else %}
-                            <span>{{ protein_percentage }}%</span>
-                        {% endif %}
+                        <span class="{% if today_protein > protein_goal %}text-green-600 font-medium{% endif %}">
+                            {{ (today_protein/protein_goal * 100)|round if protein_goal > 0 else 0 }}%
+                        </span>
                     </div>
                 </div>
             </div>
@@ -298,299 +283,4 @@
         </div>
     </div>
 </div>
-
-<!-- Success Message Toast - Using global toast function now -->
-{% if success_message %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        showToast('{{ success_message }}', 'success');
-    });
-</script>
-{% endif %}
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('settings-form');
-        const saveButton = document.getElementById('save-button');
-        const confirmationModal = document.getElementById('confirmation-modal');
-        const cancelButton = document.getElementById('cancel-button');
-        const confirmButton = document.getElementById('confirm-button');
-        const calorieInput = document.getElementById('calorie-goal');
-        const proteinInput = document.getElementById('protein-goal');
-        const currentWeightInput = document.getElementById('current-weight');
-        const weightGoalInput = document.getElementById('weight-goal');
-        const originalCalorieValue = calorieInput.value;
-        const originalProteinValue = proteinInput.value;
-        const originalWeightGoalValue = weightGoalInput.value;
-        const weightUnitRadios = document.querySelectorAll('input[name="weight_unit"]');
-        const weightUnitLabels = document.querySelectorAll('.weight-unit');
-        
-        // Quick Add Food Removal
-        const removeFoodModal = document.getElementById('remove-food-modal');
-        const cancelRemoveButton = document.getElementById('cancel-remove-button');
-        const confirmRemoveButton = document.getElementById('confirm-remove-button');
-        let foodIdToRemove = null;
-        
-        // Add event listeners to all remove buttons
-        document.querySelectorAll('.remove-quick-add-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                foodIdToRemove = this.getAttribute('data-food-id');
-                removeFoodModal.classList.remove('hidden');
-            });
-        });
-        
-        // Cancel removal
-        cancelRemoveButton.addEventListener('click', function() {
-            removeFoodModal.classList.add('hidden');
-            foodIdToRemove = null;
-        });
-        
-        // Confirm removal
-        confirmRemoveButton.addEventListener('click', function() {
-            if (foodIdToRemove) {
-                // Send AJAX request to remove the food
-                $.ajax({
-                    url: "{{ url_for('remove_quick_add_food') }}",
-                    type: 'POST',
-                    data: { 
-                        food_id: foodIdToRemove
-                    },
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            // Remove the food item from the UI
-                            const foodItem = document.querySelector(`.remove-quick-add-btn[data-food-id="${foodIdToRemove}"]`).closest('.quick-add-food-item');
-                            foodItem.remove();
-                            
-                            // Show success message
-                            showToast('Food removed from Quick Add', 'success');
-                            
-                            // Check if there are no more foods
-                            const remainingFoods = document.querySelectorAll('.quick-add-food-item');
-                            if (remainingFoods.length === 0) {
-                                // Show the empty state
-                                document.getElementById('quick-add-foods-container').innerHTML = `
-                                    <div class="text-center p-8 bg-gray-50 rounded-md border border-dashed border-gray-300">
-                                        <p class="text-gray-600">You don't have any Quick Add foods yet. Add some from the Dashboard page!</p>
-                                        <a href="{{ url_for('dashboard') }}" class="mt-4 inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600">Go to Dashboard</a>
-                                    </div>
-                                `;
-                            }
-                        } else {
-                            showToast('Error removing food', 'error');
-                        }
-                    },
-                    error: function() {
-                        showToast('Error removing food', 'error');
-                    },
-                    complete: function() {
-                        removeFoodModal.classList.add('hidden');
-                        foodIdToRemove = null;
-                    }
-                });
-            }
-        });
-        
-        // Store the original weight unit value
-        const originalWeightUnit = document.querySelector('input[name="weight_unit"]:checked').value;
-        let currentWeightUnit = originalWeightUnit;
-        
-        // Function to validate inputs
-        function validateInputs() {
-            let isValid = true;
-            
-            // Clear previous error messages
-            document.querySelectorAll('.error-message').forEach(el => el.remove());
-            calorieInput.classList.remove('input-error');
-            proteinInput.classList.remove('input-error');
-            
-            // Validate calorie input
-            if (!calorieInput.value || parseInt(calorieInput.value) <= 0) {
-                const errorMsg = document.createElement('p');
-                errorMsg.className = 'error-message';
-                errorMsg.textContent = 'Please enter a positive number';
-                calorieInput.parentNode.parentNode.appendChild(errorMsg);
-                calorieInput.classList.add('input-error');
-                isValid = false;
-            }
-            
-            // Validate protein input
-            if (!proteinInput.value || parseInt(proteinInput.value) <= 0) {
-                const errorMsg = document.createElement('p');
-                errorMsg.className = 'error-message';
-                errorMsg.textContent = 'Please enter a positive number';
-                proteinInput.parentNode.parentNode.appendChild(errorMsg);
-                proteinInput.classList.add('input-error');
-                isValid = false;
-            }
-            
-            return isValid;
-        }
-        
-        // Check if form values have changed
-        function checkFormChanged() {
-            const calorieChanged = calorieInput.value !== originalCalorieValue;
-            const proteinChanged = proteinInput.value !== originalProteinValue;
-            const weightUnitChanged = currentWeightUnit !== originalWeightUnit;
-            const weightGoalChanged = weightGoalInput.value !== originalWeightGoalValue;
-            const currentWeightEntered = currentWeightInput.value.trim() !== '';
-            
-            if (calorieChanged || proteinChanged || weightUnitChanged || weightGoalChanged || currentWeightEntered) {
-                form.classList.add('settings-form-changed');
-            } else {
-                form.classList.remove('settings-form-changed');
-            }
-        }
-        
-        // Update weight unit labels when the user changes their preference
-        weightUnitRadios.forEach(radio => {
-            radio.addEventListener('change', function() {
-                const unitText = this.value === '1' ? 'lbs' : 'kg';
-                currentWeightUnit = this.value;
-                weightUnitLabels.forEach(label => {
-                    label.textContent = unitText;
-                });
-                
-                // Convert weight goal value when unit changes
-                if (weightGoalInput.value) {
-                    if (this.value === '1' && originalWeightUnit === '0') {
-                        // Convert from kg to lbs
-                        weightGoalInput.value = (parseFloat(weightGoalInput.value) * 2.20462).toFixed(1);
-                    } else if (this.value === '0' && originalWeightUnit === '1') {
-                        // Convert from lbs to kg
-                        weightGoalInput.value = (parseFloat(weightGoalInput.value) / 2.20462).toFixed(1);
-                    }
-                }
-                
-                // Also convert current weight if it has a value
-                if (currentWeightInput.value) {
-                    if (this.value === '1' && originalWeightUnit === '0') {
-                        // Convert from kg to lbs
-                        currentWeightInput.value = (parseFloat(currentWeightInput.value) * 2.20462).toFixed(1);
-                    } else if (this.value === '0' && originalWeightUnit === '1') {
-                        // Convert from lbs to kg
-                        currentWeightInput.value = (parseFloat(currentWeightInput.value) / 2.20462).toFixed(1);
-                    }
-                }
-                
-                checkFormChanged();
-            });
-        });
-        
-        // Show confirmation modal
-        saveButton.addEventListener('click', function() {
-            if (validateInputs()) {
-                // Check what values have changed
-                const calorieChanged = calorieInput.value !== originalCalorieValue;
-                const proteinChanged = proteinInput.value !== originalProteinValue;
-                const weightUnitChanged = currentWeightUnit !== originalWeightUnit;
-                const weightGoalChanged = weightGoalInput.value !== originalWeightGoalValue;
-                const currentWeightEntered = currentWeightInput.value.trim() !== '';
-                
-                // Only show confirmation if values have changed
-                if (calorieChanged || proteinChanged || weightUnitChanged || weightGoalChanged || currentWeightEntered) {
-                    // Update confirmation message based on what's changing
-                    let changeMessage = 'Are you sure you want to update your settings?';
-                    const changes = [];
-                    
-                    if (calorieChanged) {
-                        changes.push('calorie goal');
-                    }
-                    if (proteinChanged) {
-                        changes.push('protein goal');
-                    }
-                    if (weightUnitChanged) {
-                        changes.push('weight unit preference');
-                    }
-                    if (weightGoalChanged) {
-                        changes.push('weight goal');
-                    }
-                    if (currentWeightEntered) {
-                        changes.push('current weight');
-                    }
-                    
-                    if (changes.length > 0) {
-                        changeMessage = `Are you sure you want to update your ${changes.join(', ')}?`;
-                    }
-                    
-                    document.querySelector('#confirmation-modal p').textContent = changeMessage;
-                    confirmationModal.classList.remove('hidden');
-                } else {
-                    // If no changes, just inform the user
-                    alert('No changes to save.');
-                }
-            }
-        });
-        
-        // Cancel button closes the modal
-        cancelButton.addEventListener('click', function() {
-            confirmationModal.classList.add('hidden');
-        });
-        
-        // Confirm button submits the form
-        confirmButton.addEventListener('click', function() {
-            form.submit();
-        });
-        
-        // Add input event listeners
-        calorieInput.addEventListener('input', function() {
-            checkFormChanged();
-        });
-        
-        proteinInput.addEventListener('input', function() {
-            checkFormChanged();
-        });
-        
-        currentWeightInput.addEventListener('input', function() {
-            checkFormChanged();
-        });
-        
-        weightGoalInput.addEventListener('input', function() {
-            checkFormChanged();
-        });
-
-        // Form submission with AJAX
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            console.log('Submitting form with weight unit:', currentWeightUnit);
-            
-            // Use AJAX to submit the form
-            $.ajax({
-                url: "{{ url_for('update_settings') }}",
-                type: "POST",
-                data: $(form).serialize(),
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                success: function(response) {
-                    console.log('Form submission successful:', response);
-                    // Toast will be handled by the global AJAX success handler
-                    if (response.redirect) {
-                        // Reload the page after a short delay to allow the toast to be seen
-                        setTimeout(function() {
-                            window.location.href = response.redirect;
-                        }, 1000);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Form submission error:', error);
-                    // Show error toast
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.toast) {
-                            showToast(response.toast.message, response.toast.category);
-                        } else {
-                            showToast('An error occurred. Please try again.', 'error');
-                        }
-                    } catch (e) {
-                        showToast('An error occurred. Please try again.', 'error');
-                    }
-                }
-            });
-        });
-    });
-</script>
 {% endblock %}

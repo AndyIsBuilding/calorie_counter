@@ -1,45 +1,54 @@
-// Toast notification function
-function showToast(message, duration = 3000) {
+// Single, centralized toast function
+function showToast(message, type = 'success', duration = 3000) {
     // Get existing toasts
     const existingToasts = document.querySelectorAll('.toast-notification');
     const toastCount = existingToasts.length;
     
     // Create toast element
     const toast = document.createElement('div');
-    toast.className = 'toast-notification fixed right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300';
+    
+    // Set background color based on type
+    const bgColors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    const bgColor = bgColors[type] || bgColors.success;
+    
+    // Set toast classes
+    toast.className = `toast-notification fixed right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 opacity-0`;
     toast.textContent = message;
     
-    // Position the toast based on how many existing toasts there are
-    const bottomOffset = 16 + (toastCount * 60); // 16px initial offset + 60px per toast
+    // Position the toast
+    const bottomOffset = 16 + (toastCount * 60);
     toast.style.bottom = bottomOffset + 'px';
     
     // Add to document
-    document.body.appendChild(toast);
+    document.getElementById('toast-container').appendChild(toast);
     
     // Extend duration based on number of toasts
-    const extendedDuration = duration + (toastCount * 500); // Add 500ms per existing toast
+    const extendedDuration = duration + (toastCount * 500);
     
     // Fade in
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         toast.classList.add('opacity-90');
-    }, 10);
+    });
     
     // Fade out and remove
     setTimeout(() => {
         toast.classList.remove('opacity-90');
         toast.classList.add('opacity-0');
         
-        // After fade out, remove the element and reposition other toasts
         setTimeout(() => {
             toast.remove();
-            
-            // Reposition remaining toasts
             repositionToasts();
         }, 300);
     }, extendedDuration);
 }
 
-// Function to reposition toasts after one is removed
+// Helper function to reposition toasts
 function repositionToasts() {
     const toasts = document.querySelectorAll('.toast-notification');
     toasts.forEach((toast, index) => {
@@ -48,3 +57,58 @@ function repositionToasts() {
     });
 }
 
+// Initialize mobile menu and toast functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Mobile menu functionality
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    
+    if (mobileMenuButton && mobileMenu) {
+        mobileMenuButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            mobileMenu.classList.toggle('hidden');
+            this.setAttribute('aria-expanded', !isExpanded);
+            
+            // Toggle icons
+            this.querySelectorAll('svg').forEach(icon => icon.classList.toggle('hidden'));
+        });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('#mobile-menu, #mobile-menu-button') && 
+                !mobileMenu.classList.contains('hidden')) {
+                mobileMenu.classList.add('hidden');
+                mobileMenuButton.setAttribute('aria-expanded', 'false');
+                mobileMenuButton.querySelector('svg:first-child').classList.remove('hidden');
+                mobileMenuButton.querySelector('svg:last-child').classList.add('hidden');
+            }
+        });
+    }
+    
+    // Display any flash messages from server
+    if (COMMON_STATE.flashMessages) {
+        COMMON_STATE.flashMessages.forEach(([category, message]) => {
+            showToast(message, category);
+        });
+    }
+    
+    // Set up AJAX to handle toast responses
+    $(document).ajaxSuccess(function(event, xhr, settings) {
+        try {
+            const response = JSON.parse(xhr.responseText);
+            if (response.toast) {
+                showToast(response.toast.message, response.toast.category);
+                
+                if (response.redirect) {
+                    setTimeout(() => {
+                        window.location.href = response.redirect;
+                    }, 1000);
+                }
+            }
+        } catch (e) {
+            // Not a JSON response or doesn't have toast property
+        }
+    });
+});
