@@ -529,21 +529,24 @@ def log_food():
     conn.commit()
     conn.close()
     
-    return toast_response(
-        message=f"Added {name} to your log",
-        category="success",
-        success=True,
-        log_entry={
-            'id': log_id,
-            'food_name': name,
-            'calories': total_calories,
-            'protein': total_protein
+    # Return a standard JSON response with toast data
+    return jsonify({
+        "success": True,
+        "toast": {
+            "message": f"Added {name} to your log",
+            "category": "success"
         },
-        totals={
-            'calories': total_calories_sum,
-            'protein': total_protein_sum
+        "log_entry": {
+            "id": log_id,
+            "food_name": name,
+            "calories": total_calories,
+            "protein": total_protein
+        },
+        "totals": {
+            "calories": total_calories_sum,
+            "protein": total_protein_sum
         }
-    )
+    })
 
 
 @app.route('/log_quick_food', methods=['POST'])
@@ -609,13 +612,15 @@ def remove_food(log_id):
     conn.commit()
     conn.close()
     
-    return jsonify({
-        'success': True,
-        'totals': {
+    return toast_response(
+        message="Food removed successfully",
+        category="success",
+        success=True,
+        totals={
             'calories': total_calories or 0,
             'protein': total_protein or 0
         }
-    })
+    )
 
 @app.route('/save_summary', methods=['POST'])
 @login_required
@@ -977,6 +982,7 @@ def get_testimonials():
 @login_required
 def settings(): 
     # Get success message from flash if it exists
+    # TODO: why is this here? 
     success_message = None
     flashed_messages = get_flashed_messages(with_categories=True)
     for category, message in flashed_messages:

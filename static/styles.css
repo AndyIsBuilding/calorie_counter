@@ -348,18 +348,44 @@
     color: white;
 }
 
-/* Toast and processing styles */
+/* Toast Notification Styles */
 .toast-notification {
+    position: fixed;
+    right: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    color: white;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(16px);
     opacity: 0;
-    transition: all 0.3s ease;
-    max-width: 80%;
+    z-index: 9999;
+    max-width: 300px;
     word-wrap: break-word;
     pointer-events: none;
 }
 
-button.processing {
-    opacity: 0.8;
-    cursor: not-allowed;
+.toast-notification.visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.toast-notification.success {
+    background-color: #10B981; /* green-600 */
+}
+
+.toast-notification.error {
+    background-color: #EF4444; /* red-600 */
+}
+
+.toast-notification.warning {
+    background-color: #F59E0B; /* amber-600 */
+}
+
+.toast-notification.info {
+    background-color: #3B82F6; /* blue-600 */
 }
 
 /* Settings page styles */
@@ -536,22 +562,26 @@ button.processing {
     background-color: #f3f4f6;  /* bg-gray-100 */
     color: #374151;  /* text-gray-700 */
     border: 2px solid #10b981;  /* border-2 border-green-500 */
+    border-radius: 0.375rem;  /* rounded-md */
 }
 
 .action-button-green:hover {
     background-color: #10b981;  /* bg-green-500 */
     color: white;
+    border-radius: 0.375rem;  /* rounded-md */
 }
 
 .action-button-blue {
     background-color: #f3f4f6;  /* bg-gray-100 */
     color: #374151;  /* text-gray-700 */
     border: 2px solid #3b82f6;  /* border-2 border-blue-500 */
+    border-radius: 0.375rem;  /* rounded-md */
 }
 
 .action-button-blue:hover {
     background-color: #3b82f6;  /* bg-blue-500 */
     color: white;
+    border-radius: 0.375rem;  /* rounded-md */
 }
 
 /* Table Styles */
@@ -680,4 +710,19 @@ button.processing {
 .time-selector:focus {
     ring: 2px solid #3b82f6;  /* focus:ring-blue-500 */
     border-color: #3b82f6;  /* focus:border-blue-500 */
+}
+
+.quick-add-button.pressed {
+    transform: scale(0.95);
+    opacity: 0.8;
+    transition: all 0.1s ease;
+}
+
+/* Toast Container Styles */
+#toast-container {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    padding: 16px;
+    z-index: 9999;
 }

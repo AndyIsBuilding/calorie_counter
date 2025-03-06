@@ -5,8 +5,10 @@ const DYNAMIC_CACHE = 'dynamic-v1';
 // URLs to cache
 const STATIC_URLS = [
   '/',
-  '/static/css/style.css',
+  '/static/styles.css',
   '/static/js/main.js',
+  '/static/js/dashboard.js',
+  '/static/js/common.js',
   // Add other static assets
 ];
 

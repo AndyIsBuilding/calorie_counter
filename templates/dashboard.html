@@ -8,13 +8,16 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 <!-- Add Font Awesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- jQuery is already loaded in layout.html -->
 <script>
     // Define URLs for JavaScript to use
     const URLS = {
         logQuickFood: "{{ url_for('log_quick_food') }}",
         quickAddFood: "{{ url_for('quick_add_food') }}",
         logFood: "{{ url_for('log_food') }}",
-        saveSummary: "{{ url_for('save_summary') }}"
+        saveSummary: "{{ url_for('save_summary') }}",
+        // removeFood: "{{ url_for('remove_food', log_id='') }}"
+        removeFood: "{{ url_for('remove_food', log_id=0) }}".replace('/0', '/')
     };
     
     // Define initial state
@@ -24,8 +27,7 @@
 </script>
 
 <!-- Load dashboard.js after defining URLs -->
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ range(1, 10000) | random }}"></script>
 
 {% endblock %}
 

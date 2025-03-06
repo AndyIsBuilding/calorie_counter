@@ -1,51 +1,37 @@
-// Single, centralized toast function
+// Updated showToast function with cleaner code
 function showToast(message, type = 'success', duration = 3000) {
-    // Get existing toasts
-    const existingToasts = document.querySelectorAll('.toast-notification');
-    const toastCount = existingToasts.length;
-    
     // Create toast element
     const toast = document.createElement('div');
     
-    // Set background color based on type
-    const bgColors = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
-    };
+    // Set class for styling
+    toast.className = `toast-notification ${type}`;
     
-    const bgColor = bgColors[type] || bgColors.success;
+    toast.innerHTML = message;
     
-    // Set toast classes
-    toast.className = `toast-notification fixed right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 opacity-0`;
-    toast.textContent = message;
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
     
-    // Position the toast
-    const bottomOffset = 16 + (toastCount * 60);
-    toast.style.bottom = bottomOffset + 'px';
+    // Force a reflow to ensure the transition works
+    toast.offsetHeight;
     
-    // Add to document
-    document.getElementById('toast-container').appendChild(toast);
-    
-    // Extend duration based on number of toasts
-    const extendedDuration = duration + (toastCount * 500);
-    
-    // Fade in
-    requestAnimationFrame(() => {
-        toast.classList.add('opacity-90');
-    });
-    
-    // Fade out and remove
+    // Show the toast
     setTimeout(() => {
-        toast.classList.remove('opacity-90');
-        toast.classList.add('opacity-0');
+        toast.classList.add('visible');
         
+        // Reposition all toasts
+        repositionToasts();
+    }, 10); // Small delay to ensure styles are applied
+    
+    // Remove after duration
+    setTimeout(() => {
+        toast.classList.remove('visible');
         setTimeout(() => {
             toast.remove();
             repositionToasts();
         }, 300);
-    }, extendedDuration);
+    }, duration);
+    
+    return toast;
 }
 
 // Helper function to reposition toasts
@@ -94,11 +80,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Set up AJAX to handle toast responses
-    $(document).ajaxSuccess(function(event, xhr, settings) {
+    // Create a global namespace for our toast tracking
+    window.TOAST_TRACKER = window.TOAST_TRACKER || {
+        processedResponses: new Set(),
+        requestCount: 0
+    };
+    
+    // Set up AJAX to handle toast responses with better deduplication
+    $(document).off('ajaxSuccess').on('ajaxSuccess', function(event, xhr, settings) {
+        // Increment request counter for debugging
+        window.TOAST_TRACKER.requestCount++;
+        console.log(`[${window.TOAST_TRACKER.requestCount}] ajaxSuccess triggered for URL:`, settings.url);
+        
         try {
             const response = JSON.parse(xhr.responseText);
+            
+            // Generate a unique response ID based on URL and response content
+            const responseId = `${settings.url}_${JSON.stringify(response)}`;
+            console.log(`[${window.TOAST_TRACKER.requestCount}] Response ID:`, responseId);
+            console.log(`[${window.TOAST_TRACKER.requestCount}] Already processed:`, window.TOAST_TRACKER.processedResponses.has(responseId));
+            
+            // Check if we've already processed this exact response
+            if (window.TOAST_TRACKER.processedResponses.has(responseId)) {
+                console.log(`[${window.TOAST_TRACKER.requestCount}] Skipping duplicate toast for already processed response`);
+                return;
+            }
+            
+            // Mark this response as processed
+            window.TOAST_TRACKER.processedResponses.add(responseId);
+            console.log(`[${window.TOAST_TRACKER.requestCount}] Added to processed responses. Current size:`, window.TOAST_TRACKER.processedResponses.size);
+            
+            // Clean up the set periodically to prevent memory leaks
+            setTimeout(() => {
+                window.TOAST_TRACKER.processedResponses.delete(responseId);
+                console.log(`Removed ${responseId} from processed responses. Current size:`, window.TOAST_TRACKER.processedResponses.size);
+            }, 5000);
+            
             if (response.toast) {
+                console.log(`[${window.TOAST_TRACKER.requestCount}] Showing toast:`, response.toast.message);
                 showToast(response.toast.message, response.toast.category);
                 
                 if (response.redirect) {
@@ -108,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         } catch (e) {
-            // Not a JSON response or doesn't have toast property
+            console.log(`[${window.TOAST_TRACKER.requestCount}] Error parsing response or no toast found:`, e);
         }
     });
 
