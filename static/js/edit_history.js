@@ -33,13 +33,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function createExistingFoodRow(food) {
         const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-100 border-t transition-colors';
         row.innerHTML = `
             <td class="p-2">${food.name}</td>
             <td class="p-2">${food.calories}</td>
             <td class="p-2">${food.protein}</td>
             <td class="p-2">
                 <input type="hidden" name="existing_food_id[]" value="${food.id}">
-                <button type="button" class="remove-food bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600">Remove</button>
+                <button type="button" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md transition-colors">Remove</button>
             </td>
         `;
         return row;
@@ -47,11 +48,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function createNewFoodRow() {
         const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-100 border-t transition-colors';
         row.innerHTML = `
             <td class="p-2"><input type="text" name="new_food_name[]" required class="w-full px-2 py-1 border rounded-md"></td>
             <td class="p-2"><input type="number" name="new_food_calories[]" required class="w-full px-2 py-1 border rounded-md"></td>
             <td class="p-2"><input type="number" name="new_food_protein[]" required class="w-full px-2 py-1 border rounded-md"></td>
-            <td class="p-2"><button type="button" class="remove-food bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600">Remove</button></td>
+            <td class="p-2"><button type="button" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md transition-colors">Remove</button></td>
         `;
         return row;
     }
@@ -68,7 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     foodTable.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-food')) {
+        if (e.target.tagName === 'BUTTON' && 
+            (e.target.classList.contains('bg-red-500') || 
+             e.target.classList.contains('remove-food') || 
+             e.target.classList.contains('button-remove') || 
+             e.target.classList.contains('delete-button'))) {
             e.target.closest('tr').remove();
         }
     });

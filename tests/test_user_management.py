@@ -164,9 +164,6 @@ def test_user_registration(app, client):
     with app.app_context():
         # Use the shared connection for the in-memory database
         conn = app.config['DB_CONNECTION']
-        # Print debug information
-        print(f"TESTING flag: {app.config['TESTING']}")
-        print(f"Test DB_PATH: {app.config['DB_PATH']}")
 
         # Generate a unique test username
         import random
@@ -184,18 +181,13 @@ def test_user_registration(app, client):
         # Verify there's at least one user before we attempt registration
         c.execute("SELECT COUNT(*) FROM users")
         user_count_before = c.fetchone()[0]
-        print(f"User count before registration: {user_count_before}")
         assert user_count_before > 0, "Test requires at least one user to exist"
 
         # Attempt registration
-        print(f"Registering user: {test_username}")
         response = client.post('/register', data={
             'username': test_username,
             'password': test_password
         }, follow_redirects=True)
-
-        # Print the response data for debugging
-        print(f"Response status: {response.status_code}")
 
         # Check for indicators in the response
         has_one_user_limit = b'Only one user' in response.data
@@ -216,7 +208,7 @@ def test_user_registration(app, client):
         # Check the final user count
         c.execute("SELECT COUNT(*) FROM users")
         user_count_after = c.fetchone()[0]
-        print(f"User count after registration: {user_count_after}")
+
 
         # The application has a one-user limit and should prevent registration
         if has_one_user_limit:

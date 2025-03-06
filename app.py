@@ -101,7 +101,6 @@ class User(UserMixin):
         if self.weight_unit == 1:  # If user prefers lbs
             # Convert lbs to kg for storage (1 lb = 0.45359237 kg)
             stored_weight = weight * 0.45359237
-            print(f"Converting weight from lbs to kg for storage: {weight} lbs -> {stored_weight} kg")
             
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -112,11 +111,9 @@ class User(UserMixin):
         
         if existing_log:
             # Update existing log
-            print(f"Updating existing weight log for {date}: {stored_weight} kg")
             c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (stored_weight, existing_log[0]))
         else:
             # Insert new log
-            print(f"Creating new weight log for {date}: {stored_weight} kg")
             c.execute("INSERT INTO weight_logs (date, weight, user_id) VALUES (?, ?, ?)", 
                      (date, stored_weight, self.id))
         
@@ -138,15 +135,12 @@ class User(UserMixin):
         
         conn.close()
         
-        print(f"Retrieved {len(logs)} weight logs from database")
-        
         # Convert weights to user's preferred unit
         converted_logs = []
         for date, weight in logs:
             if self.weight_unit == 1:  # If user prefers lbs
                 # Convert kg to lbs (1 kg = 2.20462 lbs)
                 converted_weight = round(weight * 2.20462, 1)
-                print(f"Converting weight from kg to lbs for display: {weight} kg -> {converted_weight} lbs")
                 converted_logs.append((date, converted_weight))
             else:
                 converted_logs.append((date, weight))
@@ -238,7 +232,6 @@ def init_db():
     
     # Add user_id column if it doesn't exist
     if 'user_id' not in column_names:
-        print("Adding user_id column to foods table")
         c.execute("ALTER TABLE foods ADD COLUMN user_id INTEGER")
         c.execute("UPDATE foods SET user_id = 1")  # Set default user_id to 1 for existing foods
     
@@ -342,7 +335,7 @@ def edit_history():
 @login_required
 def update_history():
     edit_date = request.form['edit_date']
-    print(f"Edit date: {edit_date}")
+    
     existing_food_ids = request.form.getlist('existing_food_id[]')
     new_food_names = request.form.getlist('new_food_name[]')
     new_food_calories = request.form.getlist('new_food_calories[]')
@@ -1034,10 +1027,6 @@ def update_settings():
     current_weight = request.form.get('current_weight', type=float)
     weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
     
-    # Debug logging
-    print(f"Update settings: calorie_goal={calorie_goal}, protein_goal={protein_goal}, weight_goal={weight_goal}, current_weight={current_weight}, weight_unit={weight_unit}")
-    print(f"Previous weight unit: {current_user.weight_unit}")
-    
     # Validate the input
     if calorie_goal is None or protein_goal is None:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1071,7 +1060,6 @@ def update_settings():
         if weight_unit == 1:  # If user is using pounds
             # Convert from lbs to kg for storage (1 lb = 0.45359237 kg)
             weight_goal_kg = weight_goal * 0.45359237
-            print(f"Converting weight goal from lbs to kg for storage: {weight_goal} lbs -> {weight_goal_kg} kg")
             weight_goal = weight_goal_kg
     
     # Update the user's goals using the User class method
@@ -1104,26 +1092,33 @@ def update_settings():
 def history():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # Get data for the last 90 days (3 months) instead of just 30 days
-    ninety_days_ago = (get_local_date() - timedelta(days=90)).isoformat()
+    
+    # Get all data for the user for charts (ascending order for proper timeline)
     c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal, protein_goal 
                  FROM daily_summary 
-                 WHERE date >= ? AND user_id = ? 
-                 ORDER BY date ASC""", (ninety_days_ago, current_user.id))
-    summaries = c.fetchall()
+                 WHERE user_id = ? 
+                 ORDER BY date ASC""", (current_user.id,))
+    all_summaries = c.fetchall()
     
-    # Get weight logs for the same period
+    # Get the same data but in descending order for the table display (most recent first)
+    c.execute("""SELECT date, total_calories, total_protein, summary, calorie_goal, protein_goal 
+                 FROM daily_summary 
+                 WHERE user_id = ? 
+                 ORDER BY date DESC""", (current_user.id,))
+    weekly_summaries = c.fetchall()
+    
+    # Get all weight logs for the user
     c.execute("""SELECT date, weight FROM weight_logs 
-                 WHERE date >= ? AND user_id = ? 
-                 ORDER BY date ASC""", (ninety_days_ago, current_user.id))
+                 WHERE user_id = ? 
+                 ORDER BY date ASC""", (current_user.id,))
     weight_logs = c.fetchall()
     
-    # Format data for charts
-    dates = [entry[0] for entry in summaries]
-    calories = [entry[1] for entry in summaries]
-    proteins = [entry[2] for entry in summaries]
-    calorie_goals = [entry[4] for entry in summaries]
-    protein_goals = [entry[5] for entry in summaries]
+    # Format data for charts (using the ascending order data)
+    dates = [entry[0] for entry in all_summaries]
+    calories = [entry[1] for entry in all_summaries]
+    proteins = [entry[2] for entry in all_summaries]
+    calorie_goals = [entry[4] for entry in all_summaries]
+    protein_goals = [entry[5] for entry in all_summaries]
     
     # Format weight data
     weight_dates = [entry[0] for entry in weight_logs]
@@ -1145,12 +1140,8 @@ def history():
     
     conn.close()
     
-    # Debug logging
-    print(f"History data: {len(dates)} nutrition entries, {len(weight_dates)} weight entries")
-    print(f"Weight unit: {weight_unit}, Weight goal: {weight_goal}")
-    
     return render_template('history.html', 
-                          weekly_summaries=summaries,
+                          weekly_summaries=weekly_summaries,  # This is now in descending order
                           chart_dates=dates,
                           chart_calories=calories,
                           chart_proteins=proteins,
@@ -1164,10 +1155,7 @@ def history():
 @app.route('/remove_quick_add_food', methods=['POST'])
 @login_required
 def remove_quick_add_food():
-    print("remove_quick_add_food endpoint called")
     food_id = request.form.get('food_id')
-    print(f"Received food_id: {food_id}")
-    print(f"Request form data: {request.form}")
     
     if not food_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1215,7 +1203,7 @@ def remove_quick_add_food():
         return redirect(url_for('settings'))
     except sqlite3.Error as e:
         conn.rollback()
-        print(f"Database error: {e}")
+
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
                 'success': False,

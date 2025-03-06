@@ -11,26 +11,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 def test_load_user_existing(app, auth):
     """Test that load_user correctly loads an existing user."""
     with app.app_context():
-        print(f"\nTest using database: {app.config['DB_PATH']}")
-        
         # Use the shared connection
         conn = app.config['DB_CONNECTION']
         c = conn.cursor()
         
         # Check what tables exist
         c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = c.fetchall()
-        print(f"Tables in database: {tables}")
         
         # Check users in the database
         try:
             c.execute("SELECT id, username FROM users")
-            users = c.fetchall()
-            print(f"Users in database: {users}")
+
         except sqlite3.OperationalError as e:
             print(f"Error querying users: {e}")
-        
-        # Don't close the connection since it's shared
         
         # Now test the load_user function
         user = load_user('1')
@@ -66,7 +59,6 @@ def test_user_authentication(app, client, auth):
         c.execute("SELECT * FROM users WHERE username = ?", ('testuser',))
         user = c.fetchone()
         if not user:
-            print("Test user not found in database!")
             test_password = generate_password_hash('password')
             c.execute(
                 "INSERT INTO users (username, password, calorie_goal, protein_goal) VALUES (?, ?, ?, ?)",
@@ -82,8 +74,7 @@ def test_user_authentication(app, client, auth):
         
         # Test successful login
         response = auth.login()
-        print(f"Successful login response: {response.status_code}")
-        print(f"Response data: {response.get_data(as_text=True)}")
+
         assert response.status_code == 200
         data = response.get_json()
         assert data['success'] is True
@@ -94,8 +85,7 @@ def test_user_authentication(app, client, auth):
         
         # Test failed login
         response = auth.login(username='testuser', password='wrongpassword')
-        print(f"Failed login response: {response.status_code}")
-        print(f"Response data: {response.get_data(as_text=True)}")
+        
         assert response.status_code == 401
         data = response.get_json()
         assert data['success'] is False

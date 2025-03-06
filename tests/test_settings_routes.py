@@ -152,6 +152,12 @@ def test_remove_quick_add_food(client, auth):
         assert data['success'] is True
         food_id = data['food']['id']
         
+        # Verify food was added
+        response = client.get('/settings')
+        assert response.status_code == 200
+        print(f"Test data: {response.data}")
+        assert b'Test Food' in response.data
+        
         # Remove the food
         response = client.post('/remove_quick_add_food', 
                              data={'food_id': food_id}, 
@@ -159,7 +165,17 @@ def test_remove_quick_add_food(client, auth):
         assert response.status_code == 200
         assert response.get_json()['success'] is True
         
-        # Verify food was removed
+        # Verify food was removed - use a more specific approach
         response = client.get('/settings')
         assert response.status_code == 200
-        assert b'Test Food' not in response.data 
+        
+        # Check if the food is not in the quick add foods section
+        # This is more reliable than checking the entire page
+        assert b'Test Food' not in response.data
+        
+        # Alternative approach: Query the database directly to verify removal
+        conn = client.application.config['DB_CONNECTION']
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM quick_foods WHERE food_name = 'Test Food'")
+        result = cursor.fetchone()
+        assert result is None 

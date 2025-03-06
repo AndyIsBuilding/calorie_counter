@@ -82,7 +82,6 @@ window.addEventListener('load', function() {
                         if (response.success) {
                             addQuickAddButton(response.food);
                             $('#addFoodForm')[0].reset();
-                            // Note: Not manually calling showToast here as ajaxSuccess in common.js will handle it
                         }
                     },
                     error: function(xhr, status, error) {

@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const originalWeightUnit = INITIAL_STATE.weightUnit;
     let currentWeightUnit = originalWeightUnit;
 
-    // Quick Add Food Removal
-    if (INITIAL_STATE.ajaxOnly) {
+    // Quick Add Food Removal - always set this up if foods exist
+    if (INITIAL_STATE.foods && INITIAL_STATE.foods.length > 0) {
         setupQuickAddFoodRemoval();
     }
 
@@ -195,24 +195,9 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            success: function(response) {
-                if (response.redirect) {
-                    setTimeout(function() {
-                        window.location.href = response.redirect;
-                    }, 1000);
-                }
-            },
             error: function(xhr, status, error) {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.toast) {
-                        showToast(response.toast.message, response.toast.category);
-                    } else {
-                        showToast('An error occurred. Please try again.', 'error');
-                    }
-                } catch (e) {
-                    showToast('An error occurred. Please try again.', 'error');
-                }
+                console.error('Settings update error:', {xhr, status, error});
+                showToast('An error occurred. Please try again.', 'error');
             }
         });
     });
@@ -267,8 +252,6 @@ function setupQuickAddFoodRemoval() {
                         ).closest('.quick-add-food-item');
                         foodItem.remove();
                         
-                        showToast('Food removed from Quick Add', 'success');
-                        
                         // Check if there are no more foods
                         const remainingFoods = document.querySelectorAll('.quick-add-food-item');
                         if (remainingFoods.length === 0) {
@@ -279,11 +262,10 @@ function setupQuickAddFoodRemoval() {
                                 </div>
                             `;
                         }
-                    } else {
-                        showToast('Error removing food', 'error');
                     }
                 },
-                error: function() {
+                error: function(xhr, status, error) {
+                    console.error('Remove food error:', {xhr, status, error});
                     showToast('Error removing food', 'error');
                 },
                 complete: function() {

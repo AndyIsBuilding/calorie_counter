@@ -127,245 +127,327 @@ function filterDataByDays(days) {
     };
 }
 
-// Initialize charts with default data (30 days)
-let filteredData = filterDataByDays('30');
-updateSummaryStats(filteredData);
-
-// Calorie Chart
-const calorieCtx = document.getElementById('calorieChart').getContext('2d');
-const calorieChart = new Chart(calorieCtx, {
-    type: 'bar',
-    data: {
-        labels: formatDates(filteredData.dates),
-        datasets: [
-            {
-                label: 'Calories',
-                data: filteredData.calories,
-                backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            },
-            {
-                label: 'Calorie Goal',
-                data: filteredData.calorieGoals,
-                type: 'line',
-                fill: false,
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 2,
-                pointRadius: 0
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                title: {
-                    display: true,
-                    text: 'Calories'
-                }
-            },
-            x: {
-                title: {
-                    display: true,
-                    text: 'Date'
-                },
-                ticks: {
-                    maxRotation: 45,
-                    minRotation: 45,
-                    autoSkip: true,
-                    maxTicksLimit: 15
-                }
-            }
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    title: function(tooltipItems) {
-                        const index = tooltipItems[0].dataIndex;
-                        return filteredData.dates[index];
-                    }
-                }
-            },
-            decimation: {
-                enabled: true,
-                algorithm: 'min-max'
+// Wrap all initialization code in a DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // Calculate the actual data range in days
+    let oldestDate = null;
+    if (allDates.length > 0) {
+        // Find the oldest date in nutrition data
+        oldestDate = new Date(Math.min(...allDates.map(d => new Date(d))));
+        
+        // Check if we have weight data that goes back further
+        if (allWeightDates.length > 0) {
+            const oldestWeightDate = new Date(Math.min(...allWeightDates.map(d => new Date(d))));
+            
+            if (oldestWeightDate < oldestDate) {
+                oldestDate = oldestWeightDate;
             }
         }
     }
-});
-
-// Protein Chart
-const proteinCtx = document.getElementById('proteinChart').getContext('2d');
-const proteinChart = new Chart(proteinCtx, {
-    type: 'bar',
-    data: {
-        labels: formatDates(filteredData.dates),
-        datasets: [
-            {
-                label: 'Protein (g)',
-                data: filteredData.proteins,
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            },
-            {
-                label: 'Protein Goal (g)',
-                data: filteredData.proteinGoals,
-                type: 'line',
-                fill: false,
-                borderColor: 'rgba(153, 102, 255, 1)',
-                borderWidth: 2,
-                pointRadius: 0
+    
+    // Calculate days of data available
+    let daysOfDataAvailable = 0;
+    if (oldestDate) {
+        const today = new Date();
+        const diffTime = Math.abs(today - oldestDate);
+        daysOfDataAvailable = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    
+    // Update time range selector options based on available data
+    const timeRangeSelector = document.getElementById('timeRangeSelector');
+    if (timeRangeSelector) {
+        // Remove options that exceed our data range
+        Array.from(timeRangeSelector.options).forEach(option => {
+            const value = parseInt(option.value);
+            if (!isNaN(value) && value > daysOfDataAvailable) {
+                option.disabled = true;
+                option.text += ` (insufficient data - only ${daysOfDataAvailable} days available)`;
             }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                title: {
-                    display: true,
-                    text: 'Protein (g)'
-                }
-            },
-            x: {
-                title: {
-                    display: true,
-                    text: 'Date'
-                },
-                ticks: {
-                    maxRotation: 45,
-                    minRotation: 45,
-                    autoSkip: true,
-                    maxTicksLimit: 15
-                }
-            }
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    title: function(tooltipItems) {
-                        const index = tooltipItems[0].dataIndex;
-                        return filteredData.dates[index];
-                    }
-                }
-            },
-            decimation: {
-                enabled: true,
-                algorithm: 'min-max'
-            }
+        });
+        
+        // Set the default selection to the appropriate option
+        if (daysOfDataAvailable <= 7) {
+            timeRangeSelector.value = 'all';
+        } else if (daysOfDataAvailable <= 14) {
+            timeRangeSelector.value = '7';
+        } else if (daysOfDataAvailable <= 30) {
+            timeRangeSelector.value = '14';
+        } else {
+            timeRangeSelector.value = '30'; // Default to 30 days
         }
     }
-});
 
-// Weight Chart (replace Jinja conditional)
-if (allWeights.length > 0) {
-    const weightCtx = document.getElementById('weightChart').getContext('2d');
+    // Initialize charts with default data (30 days or all if less data available)
+    let initialTimeRange = timeRangeSelector ? timeRangeSelector.value : '30';
+    let filteredData = filterDataByDays(initialTimeRange);
+    updateSummaryStats(filteredData);
 
-    // Create an array of the weight goal for each date point
-    let weightGoalArray = Array(filteredData.weights.length).fill(weightGoal);
-
-    const weightChart = new Chart(weightCtx, {
-        type: 'line',
-        data: {
-            labels: formatDates(filteredData.weightDates),
-            datasets: [
-                {
-                    label: `Weight (${weightUnit})`,
-                    data: filteredData.weights,
-                    backgroundColor: 'rgba(255, 159, 64, 0.5)',
-                    borderColor: 'rgba(255, 159, 64, 1)',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    tension: 0.1
-                },
-                // Replace Jinja weight_goal conditional
-                ...(weightGoal ? [{
-                    label: `Weight Goal (${weightUnit})`,
-                    data: weightGoalArray,
-                    backgroundColor: 'rgba(201, 203, 207, 0.5)',
-                    borderColor: 'rgba(201, 203, 207, 1)',
-                    borderWidth: 2,
-                    borderDash: [5, 5],
-                    pointRadius: 0,
-                    fill: false
-                }] : [])
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    title: {
-                        display: true,
-                        text: `Weight (${weightUnit})`
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Date'
+    // Calorie Chart
+    const calorieCtx = document.getElementById('calorieChart')?.getContext('2d');
+    let calorieChart;
+    if (calorieCtx) {
+        calorieChart = new Chart(calorieCtx, {
+            type: 'bar',
+            data: {
+                labels: formatDates(filteredData.dates),
+                datasets: [
+                    {
+                        label: 'Calories',
+                        data: filteredData.calories,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
                     },
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45,
-                        autoSkip: true,
-                        maxTicksLimit: 15
+                    {
+                        label: 'Calorie Goal',
+                        data: filteredData.calorieGoals,
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 2,
+                        pointRadius: 0
                     }
-                }
+                ]
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        title: function(tooltipItems) {
-                            const index = tooltipItems[0].dataIndex;
-                            return filteredData.weightDates[index];
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Calories'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 15
                         }
                     }
                 },
-                decimation: {
-                    enabled: true,
-                    algorithm: 'min-max',
-                    samples: 50
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const index = tooltipItems[0].dataIndex;
+                                return filteredData.dates[index];
+                            }
+                        }
+                    },
+                    decimation: {
+                        enabled: true,
+                        algorithm: 'min-max'
+                    }
                 }
             }
+        });
+    }
+
+    // Protein Chart
+    const proteinCtx = document.getElementById('proteinChart')?.getContext('2d');
+    let proteinChart;
+    if (proteinCtx) {
+        proteinChart = new Chart(proteinCtx, {
+            type: 'bar',
+            data: {
+                labels: formatDates(filteredData.dates),
+                datasets: [
+                    {
+                        label: 'Protein (g)',
+                        data: filteredData.proteins,
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Protein Goal (g)',
+                        data: filteredData.proteinGoals,
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Protein (g)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 15
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const index = tooltipItems[0].dataIndex;
+                                return filteredData.dates[index];
+                            }
+                        }
+                    },
+                    decimation: {
+                        enabled: true,
+                        algorithm: 'min-max'
+                    }
+                }
+            }
+        });
+    }
+
+    // Weight Chart (replace Jinja conditional)
+    let weightChart;
+    if (allWeights.length > 0) {
+        const weightCtx = document.getElementById('weightChart')?.getContext('2d');
+        if (weightCtx) {
+            // Create an array of the weight goal for each date point
+            let weightGoalArray = Array(filteredData.weights.length).fill(weightGoal);
+
+            weightChart = new Chart(weightCtx, {
+                type: 'line',
+                data: {
+                    labels: formatDates(filteredData.weightDates),
+                    datasets: [
+                        {
+                            label: `Weight (${weightUnit})`,
+                            data: filteredData.weights,
+                            backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            tension: 0.1
+                        },
+                        // Replace Jinja weight_goal conditional
+                        ...(weightGoal ? [{
+                            label: `Weight Goal (${weightUnit})`,
+                            data: weightGoalArray,
+                            backgroundColor: 'rgba(201, 203, 207, 0.5)',
+                            borderColor: 'rgba(201, 203, 207, 1)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        }] : [])
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: `Weight (${weightUnit})`
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 15
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    const index = tooltipItems[0].dataIndex;
+                                    return filteredData.weightDates[index];
+                                }
+                            }
+                        },
+                        decimation: {
+                            enabled: true,
+                            algorithm: 'min-max',
+                            samples: 50
+                        }
+                    }
+                }
+            });
         }
-    });
+    }
 
     // Time range selector event listener
-    document.getElementById('timeRangeSelector').addEventListener('change', function() {
-        // ... existing update code ...
-        
-        // Update weight chart (replace Jinja conditional)
-        weightGoalArray = Array(filteredData.weights.length).fill(weightGoal);
-        weightChart.data.labels = formatDates(filteredData.weightDates);
-        weightChart.data.datasets[0].data = filteredData.weights;
-        weightChart.data.datasets[0].label = `Weight (${weightUnit})`;
-        
-        if (weightGoal) {
-            weightChart.data.datasets[1].data = weightGoalArray;
-            weightChart.data.datasets[1].label = `Weight Goal (${weightUnit})`;
-        }
-        
-        // Update y-axis title
-        weightChart.options.scales.y.title.text = `Weight (${weightUnit})`;
-        
-        weightChart.update();
-    });
-}
-
-// Update export and edit history links in HTML
-document.querySelectorAll('a[href]').forEach(link => {
-    if (link.getAttribute('href').includes('export_csv')) {
-        link.href = URLS.exportCsv;
-    } else if (link.getAttribute('href').includes('edit_history')) {
-        link.href = URLS.editHistory;
+    if (timeRangeSelector) {
+        timeRangeSelector.addEventListener('change', function() {
+            // Get the selected time range
+            const selectedDays = this.value;
+            
+            // Filter data based on selected time range
+            filteredData = filterDataByDays(selectedDays);
+            
+            // Update summary statistics
+            updateSummaryStats(filteredData);
+            
+            // Update calorie chart
+            if (calorieChart) {
+                calorieChart.data.labels = formatDates(filteredData.dates);
+                calorieChart.data.datasets[0].data = filteredData.calories;
+                calorieChart.data.datasets[1].data = filteredData.calorieGoals;
+                calorieChart.update();
+            }
+            
+            // Update protein chart
+            if (proteinChart) {
+                proteinChart.data.labels = formatDates(filteredData.dates);
+                proteinChart.data.datasets[0].data = filteredData.proteins;
+                proteinChart.data.datasets[1].data = filteredData.proteinGoals;
+                proteinChart.update();
+            }
+            
+            // Update weight chart if it exists
+            if (weightChart) {
+                const weightGoalArray = Array(filteredData.weights.length).fill(weightGoal);
+                weightChart.data.labels = formatDates(filteredData.weightDates);
+                weightChart.data.datasets[0].data = filteredData.weights;
+                
+                if (weightGoal && weightChart.data.datasets.length > 1) {
+                    weightChart.data.datasets[1].data = weightGoalArray;
+                }
+                
+                weightChart.update();
+            }
+        });
     }
+
+    // Update export and edit history links in HTML
+    document.querySelectorAll('a[href]').forEach(link => {
+        if (link.getAttribute('href').includes('export_csv')) {
+            link.href = URLS.exportCsv;
+        } else if (link.getAttribute('href').includes('edit_history')) {
+            link.href = URLS.editHistory;
+        }
+    });
 });

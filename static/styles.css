@@ -49,7 +49,10 @@
 .dashboard-card,
 .history-card,
 .error-container {
-    composes: card-base;
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
 /* Common Title Styles */
@@ -60,13 +63,15 @@
 
 .page-title,
 .history-title {
-    composes: title-base;
+    font-weight: 700;
+    margin-bottom: 1rem;
     font-size: 1.5rem;  /* text-2xl */
 }
 
 .dashboard-title,
 .section-title {
-    composes: title-base;
+    font-weight: 700;
+    margin-bottom: 1rem;
     font-size: 1.25rem;  /* text-xl */
 }
 
@@ -78,7 +83,8 @@
 
 /* Primary Button Variants */
 .button-primary {
-    composes: button-base;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
     background-color: var(--primary);
     color: white;
 }
@@ -90,12 +96,22 @@
 .button-home,
 .button-edit,
 .button-update {
-    composes: button-primary;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    background-color: var(--primary);
+    color: white;
+}
+
+.button-home:hover,
+.button-edit:hover,
+.button-update:hover {
+    background-color: var(--primary-hover);
 }
 
 /* Success Button Variants */
 .button-success {
-    composes: button-base;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
     background-color: var(--success);
     color: white;
 }
@@ -106,12 +122,21 @@
 
 .button-add,
 .button-export {
-    composes: button-success;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    background-color: var(--success);
+    color: white;
+}
+
+.button-add:hover,
+.button-export:hover {
+    background-color: var(--success-hover);
 }
 
 /* Error Button Variants */
 .button-error {
-    composes: button-base;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
     background-color: var(--error);
     color: white;
 }
@@ -122,7 +147,15 @@
 
 .button-remove,
 .delete-button {
-    composes: button-error;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    background-color: var(--error);
+    color: white;
+}
+
+.button-remove:hover,
+.delete-button:hover {
+    background-color: var(--error-hover);
 }
 
 /* Stats Card Base */
@@ -133,11 +166,15 @@
 }
 
 .stats-card-base {
-    composes: stats-card;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
 }
 
 .stats-card-calories {
-    composes: stats-card-base;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
     background-color: var(--blue-50);
 }
 
@@ -146,7 +183,9 @@
 }
 
 .stats-card-protein {
-    composes: stats-card-base;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
     background-color: var(--teal-50);
 }
 
@@ -155,7 +194,9 @@
 }
 
 .stats-card-weight {
-    composes: stats-card-base;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
     background-color: var(--orange-50);
 }
 
@@ -181,7 +222,23 @@
 .summary-table,
 .history-table,
 .log-table {
-    composes: table-base;
+    width: 100%;
+}
+
+.summary-table th,
+.summary-table td,
+.history-table th,
+.history-table td,
+.log-table th,
+.log-table td {
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.summary-table thead tr,
+.history-table thead tr,
+.log-table thead tr {
+    background-color: var(--gray-200);
 }
 
 /* Progress Bar Styles */
@@ -196,7 +253,12 @@
 
 .progress-bar,
 .progress-container {
-    composes: progress-base;
+    width: 100%;
+    height: 8px;
+    background-color: var(--gray-200);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 4px 0;
 }
 
 .progress-fill-base {
@@ -206,7 +268,9 @@
 }
 
 .progress-fill {
-    composes: progress-fill-base;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
 }
 
 .progress-fill-calories {
