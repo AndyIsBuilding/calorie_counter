@@ -225,6 +225,8 @@
         </div>
 
         <!-- Manage Quick Add Foods -->
+         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-bold mb-6">Manage Quick Add Foods</h2>
         <div id="quick-add-foods-container" class="mt-4">
             {% if foods %}
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -234,9 +236,7 @@
                         <p class="font-medium">{{ food[1] }}</p>
                         <p class="text-sm text-gray-600">{{ food[2] }} cal, {{ food[3] }}g protein</p>
                     </div>
-                    <button type="button" class="remove-quick-add-btn bg-red-500 text-white p-2 rounded-md hover:bg-red-600" data-food-id="{{ food[0] }}">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <span class="material-symbols-outlined text-red-500 cursor-pointer remove-quick-add-btn" data-food-id="{{ food[0] }}">delete</span>
                 </div>
                 {% endfor %}
             </div>
@@ -246,6 +246,8 @@
                 <a href="{{ url_for('dashboard') }}" class="mt-4 inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600">Go to Dashboard</a>
             </div>
             {% endif %}
+            
+        </div>
         </div>
     </div>
 </div>

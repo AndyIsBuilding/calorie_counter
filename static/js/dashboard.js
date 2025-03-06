@@ -118,7 +118,7 @@ window.addEventListener('load', function() {
         });
 
         // Handle Remove Food button clicks
-        $(document).on('click', '.delete-button', function(e) {
+        $(document).on('click', '.delete-icon', function(e) {
             e.preventDefault();
             var logId = $(this).data('log-id');
             
@@ -204,7 +204,7 @@ function updateTodaysLog(logEntry) {
             '<td class="p-2">' + logEntry.calories + '</td>' +
             '<td class="p-2">' + logEntry.protein + 'g</td>' +
             '<td class="p-2">' +
-                '<button class="delete-button bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600" data-log-id="' + logEntry.id + '"><i class="fas fa-trash"></i></button>' +
+                '<span class="material-symbols-outlined text-red-500 cursor-pointer delete-icon" data-log-id="' + logEntry.id + '">delete</span>' +
             '</td>' +
         '</tr>'
     );

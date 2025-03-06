@@ -665,13 +665,23 @@
 
 /* Delete Button */
 .delete-button {
-    background-color: #ef4444;  /* bg-red-500 */
-    color: white;
-    border-radius: 0.375rem;  /* rounded-md */
+    color: #ef4444;  /* text-red-500 */
+    cursor: pointer;
 }
 
 .delete-button:hover {
-    background-color: #dc2626;  /* bg-red-600 */
+    color: #dc2626;  /* text-red-600 */
+}
+
+/* Delete Icon - Material Icons version */
+.delete-icon {
+    color: #ef4444;  /* text-red-500 */
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.delete-icon:hover {
+    color: #dc2626;  /* text-red-600 */
 }
 
 /* Summary Button */
