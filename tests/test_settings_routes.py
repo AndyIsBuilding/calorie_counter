@@ -1,9 +1,9 @@
-import pytest
+import pytest #noqa
 from datetime import datetime, timedelta
 import pytz
 import logging
 import sqlite3
-from flask import current_app as app
+
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -133,49 +133,53 @@ def test_history_route(client, auth):
         assert response.status_code == 200
         assert b'Test Food' in response.data
 
-def test_remove_quick_add_food(client, auth):
+def test_remove_quick_add_food(client, auth, app):
     """Test removing quick add food functionality."""
-    with client.application.app_context():
-        # Login first
-        response = auth.login()
-        assert response.status_code == 200
-        assert response.get_json()['success'] is True
-        
-        # Add a test food
-        response = client.post('/quick_add_food', data={
-            'name': 'Test Food',
-            'calories': '100',
-            'protein': '10'
-        }, headers={'X-Requested-With': 'XMLHttpRequest'})
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data['success'] is True
-        food_id = data['food']['id']
-        
-        # Verify food was added
-        response = client.get('/settings')
-        assert response.status_code == 200
-        print(f"Test data: {response.data}")
-        assert b'Test Food' in response.data
-        
-        # Remove the food
-        response = client.post('/remove_quick_add_food', 
-                             data={'food_id': food_id}, 
-                             headers={'X-Requested-With': 'XMLHttpRequest'})
-        assert response.status_code == 200
-        assert response.get_json()['success'] is True
-        
-        # Verify food was removed - use a more specific approach
-        response = client.get('/settings')
-        assert response.status_code == 200
-        
-        # Check if the food is not in the quick add foods section
-        # This is more reliable than checking the entire page
-        assert b'Test Food' not in response.data
-        
-        # Alternative approach: Query the database directly to verify removal
-        conn = client.application.config['DB_CONNECTION']
+    # Login first
+    response = auth.login()
+    assert response.status_code == 200
+    assert response.get_json()['success'] is True
+    
+    # First, clear any existing "Test Food" entries to avoid conflicts
+    with app.app_context():
+        conn = app.config['DB_CONNECTION']
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM quick_foods WHERE food_name = 'Test Food'")
-        result = cursor.fetchone()
-        assert result is None 
+        cursor.execute("DELETE FROM foods WHERE name = 'Test Food'")
+        conn.commit()
+    
+    # Add a test food
+    response = client.post('/quick_add_food', data={
+        'name': 'Test Food',
+        'calories': '100',
+        'protein': '10'
+    }, headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+    food_id = data['food']['id']
+    
+    # Verify the food was added to the database
+    with app.app_context():
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM foods WHERE id = ?", (food_id,))
+        food = cursor.fetchone()
+        assert food is not None
+    
+    # Now remove the food
+    response = client.post('/remove_quick_add_food', data={
+        'food_id': food_id
+    }, headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert response.status_code == 200
+    assert response.get_json()['success'] is True
+    
+    # Verify the food was removed from the database
+    with app.app_context():
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM foods WHERE id = ?", (food_id,))
+        food = cursor.fetchone()
+        assert food is None
+    
+    # Also verify the UI doesn't contain our specific food ID
+    response = client.get('/settings')
+    assert response.status_code == 200
+    assert f'data-food-id="{food_id}"'.encode() not in response.data 

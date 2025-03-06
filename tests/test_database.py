@@ -39,8 +39,12 @@ def test_database_tables(app):
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
         assert c.fetchone() is not None
         
-        # Check for food_log table
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='food_log'")
+        # Check for daily_log table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_log'")
+        assert c.fetchone() is not None
+        
+        # Check for foods table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='foods'")
         assert c.fetchone() is not None
         
         # Check for daily_summary table
@@ -54,7 +58,7 @@ def test_database_tables(app):
         # Don't close the shared connection
 
 def test_insert_food_log(app):
-    """Test inserting data into the food_log table."""
+    """Test inserting data into the daily_log table."""
     with app.app_context():
         # Use the shared connection for the in-memory database
         conn = app.config['DB_CONNECTION']
@@ -62,18 +66,18 @@ def test_insert_food_log(app):
         
         # Insert a test food log entry
         c.execute("""
-            INSERT INTO food_log (user_id, date, food_name, calories, protein)
+            INSERT INTO daily_log (user_id, date, food_name, calories, protein)
             VALUES (?, ?, ?, ?, ?)
         """, (1, '2023-01-01', 'Test Food', 100, 10))
         conn.commit()
         
-        # Verify the food was added
-        c.execute("""
-            SELECT * FROM food_log 
-            WHERE user_id = 1 AND food_name = ? AND calories = ? AND protein = ?
-        """, ('Test Food', 100, 10))
-        food = c.fetchone()
-        assert food is not None
+        # Verify the entry was inserted
+        c.execute("SELECT * FROM daily_log WHERE user_id = ? AND date = ?", (1, '2023-01-01'))
+        result = c.fetchone()
+        assert result is not None
+        assert result[2] == 'Test Food'  # food_name is at index 2
+        assert result[3] == 100  # calories is at index 3
+        assert result[4] == 10  # protein is at index 4
         # Don't close the shared connection
 
 def test_insert_quick_food(app):

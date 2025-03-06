@@ -1227,6 +1227,17 @@ def add_header(response):
         response.headers['Expires'] = '0'
     return response
 
+def get_db_connection():
+    """Get a database connection - uses test connection if available"""
+    # Check if we're in a test environment with a pre-configured connection
+    if current_app.config.get('TESTING') and 'DB_CONNECTION' in current_app.config:
+        return current_app.config['DB_CONNECTION']
+        
+    # Normal database connection logic for production/development
+    conn = sqlite3.connect(current_app.config['DB_PATH'])
+    conn.row_factory = sqlite3.Row
+    return conn
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)

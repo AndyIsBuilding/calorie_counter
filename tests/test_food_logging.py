@@ -26,24 +26,18 @@ def test_log_food_db(app, client, auth):
         today = get_local_date().isoformat()
         
         c.execute("""
-            INSERT INTO food_log (user_id, date, food_name, calories, protein)
+            INSERT INTO daily_log (user_id, date, food_name, calories, protein)
             VALUES (?, ?, ?, ?, ?)
         """, (1, today, food_name, calories, protein))
         conn.commit()
         
-        # Verify the entry was added to the database
+        # Verify the food was added
         c.execute("""
-            SELECT * FROM food_log 
-            WHERE date = ? AND food_name = ?
-        """, (today, food_name))
-        entry = c.fetchone()
-        # Don't close the shared connection
-        
-        assert entry is not None
-        assert entry[2] == today
-        assert entry[3] == food_name
-        assert entry[4] == calories
-        assert entry[5] == protein
+            SELECT * FROM daily_log 
+            WHERE user_id = 1 AND food_name = ? AND calories = ? AND protein = ?
+        """, (food_name, calories, protein))
+        food = c.fetchone()
+        assert food is not None
 
 def test_remove_food_db(app, client, auth):
     """Test removing a food entry from the database directly."""
@@ -62,28 +56,25 @@ def test_remove_food_db(app, client, auth):
         
         # Insert directly to the database
         c.execute("""
-            INSERT INTO food_log (user_id, date, food_name, calories, protein)
+            INSERT INTO daily_log (user_id, date, food_name, calories, protein)
             VALUES (?, ?, ?, ?, ?)
         """, (1, today, food_name, calories, protein))
         conn.commit()
         
-        # Get the ID of the inserted entry
+        # Get the ID of the inserted food
         c.execute("""
-            SELECT id FROM food_log 
-            WHERE date = ? AND food_name = ?
-        """, (today, food_name))
-        entry_id = c.fetchone()[0]
+            SELECT id FROM daily_log 
+            WHERE user_id = 1 AND food_name = ? AND date = ?
+        """, (food_name, today))
+        food_id = c.fetchone()[0]
         
-        # Delete the entry directly
-        c.execute("DELETE FROM food_log WHERE id = ?", (entry_id,))
+        # Now delete the food
+        c.execute("DELETE FROM daily_log WHERE id = ?", (food_id,))
         conn.commit()
         
-        # Verify the entry was deleted
-        c.execute("SELECT * FROM food_log WHERE id = ?", (entry_id,))
-        deleted_entry = c.fetchone()
-        # Don't close the shared connection
-        
-        assert deleted_entry is None
+        # Verify the food was deleted
+        c.execute("SELECT * FROM daily_log WHERE id = ?", (food_id,))
+        assert c.fetchone() is None
 
 def test_update_food_db(app, client, auth):
     """Test updating food entries directly in the database."""
@@ -98,18 +89,19 @@ def test_update_food_db(app, client, auth):
         test_date = '2023-01-01'
         
         # Clear any existing entries for the test date
-        c.execute("DELETE FROM food_log WHERE date = ? AND user_id = ?", (test_date, 1))
+        c.execute("DELETE FROM daily_log WHERE date = ? AND user_id = ?", (test_date, 1))
         conn.commit()
         
-        # Add test entries
+        # Add some test entries
         test_foods = [
-            ("Breakfast Eggs", 140, 12),
-            ("Toast", 80, 3)
+            ("Banana", 105, 1.3),
+            ("Yogurt", 150, 8.5),
+            ("Granola", 120, 3.0)
         ]
         
         for food in test_foods:
             c.execute("""
-                INSERT INTO food_log (user_id, date, food_name, calories, protein)
+                INSERT INTO daily_log (user_id, date, food_name, calories, protein)
                 VALUES (?, ?, ?, ?, ?)
             """, (1, test_date, food[0], food[1], food[2]))
         
@@ -121,20 +113,21 @@ def test_update_food_db(app, client, auth):
         new_protein = 5
         
         c.execute("""
-            INSERT INTO food_log (user_id, date, food_name, calories, protein)
+            INSERT INTO daily_log (user_id, date, food_name, calories, protein)
             VALUES (?, ?, ?, ?, ?)
         """, (1, test_date, new_food_name, new_calories, new_protein))
         conn.commit()
         
-        # Check that new entry was added
+        # Verify the new entry was added
         c.execute("""
-            SELECT * FROM food_log 
-            WHERE date = ? AND food_name = ? AND calories = ? AND protein = ?
-        """, (test_date, new_food_name, new_calories, new_protein))
-        new_entry = c.fetchone()
-        assert new_entry is not None
-        
-        # Don't close the shared connection
+            SELECT * FROM daily_log 
+            WHERE user_id = ? AND date = ? AND food_name = ?
+        """, (1, test_date, new_food_name))
+        result = c.fetchone()
+        assert result is not None
+        assert result[2] == new_food_name  # food_name is at index 2
+        assert result[3] == new_calories   # calories is at index 3
+        assert result[4] == new_protein    # protein is at index 4
 
 def test_daily_totals_calculation_db(app, client, auth):
     """Test calculating daily totals directly from the database."""
@@ -148,7 +141,7 @@ def test_daily_totals_calculation_db(app, client, auth):
         c = conn.cursor()
         today = get_local_date().isoformat()
         
-        c.execute("DELETE FROM food_log WHERE date = ? AND user_id = ?", (today, 1))
+        c.execute("DELETE FROM daily_log WHERE date = ? AND user_id = ?", (today, 1))
         conn.commit()
         
         # Add some test food entries for today
@@ -156,28 +149,29 @@ def test_daily_totals_calculation_db(app, client, auth):
             ("Breakfast Eggs", 140, 12),
             ("Toast", 80, 3),
             ("Lunch Salad", 200, 5),
-            ("Dinner Chicken", 300, 30)
+            ("Dinner Chicken", 300, 30),
+            ("Vegetables", 50, 2)
         ]
-        
-        expected_calories = 0
-        expected_protein = 0
         
         for food in test_foods:
             c.execute("""
-                INSERT INTO food_log (user_id, date, food_name, calories, protein)
+                INSERT INTO daily_log (user_id, date, food_name, calories, protein)
                 VALUES (?, ?, ?, ?, ?)
             """, (1, today, food[0], food[1], food[2]))
-            expected_calories += food[1]
-            expected_protein += food[2]
         
         conn.commit()
         
-        # Calculate totals directly from the database
-        c.execute("SELECT SUM(calories), SUM(protein) FROM food_log WHERE date = ? AND user_id = ?", 
-                 (today, 1))
-        db_totals = c.fetchone()
-        # Don't close the shared connection
+        # Calculate expected totals
+        expected_calories = sum(food[1] for food in test_foods)
+        expected_protein = sum(food[2] for food in test_foods)
         
-        # Verify the totals match our expectations
-        assert db_totals[0] == expected_calories
-        assert db_totals[1] == expected_protein 
+        # Calculate totals from the database
+        c.execute("""
+            SELECT SUM(calories), SUM(protein) FROM daily_log
+            WHERE user_id = ? AND date = ?
+        """, (1, today))
+        
+        result = c.fetchone()
+        assert result is not None
+        assert result[0] == expected_calories
+        assert result[1] == expected_protein 

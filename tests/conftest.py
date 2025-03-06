@@ -6,6 +6,7 @@ import sqlite3
 import logging
 from werkzeug.security import generate_password_hash
 from flask import session
+from app import app as flask_app
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -13,63 +14,63 @@ logger = logging.getLogger(__name__)
 
 # Add the parent directory to sys.path to import app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app import app as flask_app
-
-
-@pytest.fixture(scope="session")
-def db_connection():
-    """Create a single database connection for the test session."""
-    conn = sqlite3.connect(':memory:', check_same_thread=False)
-    yield conn
-    conn.close()
 
 
 @pytest.fixture
-def app(db_connection):
+def app():
     """Create and configure a Flask app for testing."""
     logger.debug("Setting up test app...")
+    
+    # Create a temporary database
+    db_fd, db_path = tempfile.mkstemp()
+    
+    # Create a database connection
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     
     # Reset the app configuration for each test
     flask_app.config.update({
         'TESTING': True,
-        'DB_CONNECTION': db_connection,  # Store the connection object
-        'DB_PATH': ':memory:',
+        'DB_PATH': db_path,
+        'DB_CONNECTION': conn,  # Add the connection to the config
         'WTF_CSRF_ENABLED': False,
         'SERVER_NAME': 'localhost',
     })
 
     logger.debug(f"Database path set to: {flask_app.config['DB_PATH']}")
-
-    # Create fresh database tables for each test
+    
+    # Patch the DB_PATH in the app module to use our test database
+    import app as app_module
+    original_db_path = app_module.DB_PATH
+    app_module.DB_PATH = db_path
+    
+    # Initialize the database
     with flask_app.app_context():
-        logger.debug("Initializing test database...")
-        init_test_db(db_connection)
-        
-        # Verify tables were created
-        c = db_connection.cursor()
-        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = c.fetchall()
-        logger.debug(f"Created tables: {tables}")
+        init_db(db_path)
 
     yield flask_app
 
     # Clean up after the test
-    with flask_app.app_context():
-        # Reset database state if needed
-        pass
-
-
-def init_test_db(conn):
-    """Initialize the test database with schema and test data."""
-    logger.debug("Running init_test_db...")
+    conn.close()
+    os.close(db_fd)
+    os.unlink(db_path)
     
+    # Restore the original DB_PATH
+    app_module.DB_PATH = original_db_path
+
+
+def init_db(db_path):
+    """Initialize the test database with the required tables."""
+    logger.debug("Initializing test database...")
+    
+    # Connect to the database
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     c = conn.cursor()
     
     # Drop existing tables if they exist
     c.executescript('''
         DROP TABLE IF EXISTS users;
         DROP TABLE IF EXISTS foods;
-        DROP TABLE IF EXISTS food_log;
+        DROP TABLE IF EXISTS daily_log;
         DROP TABLE IF EXISTS daily_summary;
         DROP TABLE IF EXISTS quick_foods;
         DROP TABLE IF EXISTS weight_logs;
@@ -93,49 +94,49 @@ def init_test_db(conn):
     c.execute('''
     CREATE TABLE IF NOT EXISTS foods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         calories INTEGER NOT NULL,
         protein INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        user_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     ''')
     
     c.execute('''
-    CREATE TABLE IF NOT EXISTS food_log (
+    CREATE TABLE IF NOT EXISTS daily_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
         date TEXT NOT NULL,
         food_name TEXT NOT NULL,
         calories INTEGER NOT NULL,
         protein INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        user_id INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     ''')
     
     c.execute('''
     CREATE TABLE IF NOT EXISTS daily_summary (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
         date TEXT NOT NULL,
-        notes TEXT,
-        total_calories INTEGER,
-        total_protein INTEGER,
+        total_calories INTEGER NOT NULL,
+        total_protein INTEGER NOT NULL,
         summary TEXT,
-        calorie_goal INTEGER DEFAULT 2000,
-        protein_goal INTEGER DEFAULT 100,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        user_id INTEGER NOT NULL,
+        calorie_goal INTEGER,
+        protein_goal INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(date, user_id)
     )
     ''')
     
     c.execute('''
     CREATE TABLE IF NOT EXISTS quick_foods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
         food_name TEXT NOT NULL,
         calories INTEGER NOT NULL,
         protein INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        user_id INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     ''')
     
@@ -145,7 +146,7 @@ def init_test_db(conn):
         date TEXT NOT NULL,
         weight REAL NOT NULL,
         user_id INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     ''')
     
@@ -156,7 +157,13 @@ def init_test_db(conn):
     
     logger.debug("Test user inserted...")
     
+    # Get the list of tables to verify
+    c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = c.fetchall()
+    logger.debug(f"Created tables: {tables}")
+    
     conn.commit()
+    return conn
 
 
 @pytest.fixture
