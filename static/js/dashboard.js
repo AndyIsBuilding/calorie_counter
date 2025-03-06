@@ -1,6 +1,3 @@
-// Add this at the top of your dashboard.js file
-console.debug('Loading dashboard.js');
-
 // Wait for both DOM and all resources to be loaded
 window.addEventListener('load', function() {
     // Initialize Lucide icons if we're using them
@@ -40,9 +37,6 @@ window.addEventListener('load', function() {
                 type: 'POST',
                 data: { food_id: foodId },
                 success: function(response) {
-                    console.debug('Quick add response:', response);
-                    console.debug('Response contains toast?', response.toast ? 'Yes' : 'No');
-                    
                     if (response.success) {
                         if (!summaryExists) {
                             updateTodaysLog(response.log_entry);
@@ -52,15 +46,6 @@ window.addEventListener('load', function() {
                             } else {
                                 console.warn('No totals data received from server');
                             }
-                            
-                            // ISSUE: This manual toast call is redundant with the ajaxSuccess handler
-                            // Let's comment it out and add debug
-                            console.debug('NOT manually showing toast - letting ajaxSuccess handle it');
-                            // showToast('✅ Food added!');
-                        } else {
-                            // If summary exists, only show the detailed message
-                            console.debug('Summary exists, letting ajaxSuccess handle toast');
-                            // showToast('✅ Food added! Refresh to see updated totals or save a new summary.');
                         }
                     }
                 },
@@ -108,49 +93,20 @@ window.addEventListener('load', function() {
                 e.preventDefault();
                 console.debug('Log food form submission. Form data:', $(this).serialize());
                 
-                // Add a unique identifier to this request
-                const requestId = 'req_' + Math.random().toString(36).substr(2, 9);
-                console.debug('Generated request ID:', requestId);
-                
                 $.ajax({
                     url: $(this).attr('action'),
                     type: 'POST',
                     data: $(this).serialize(),
-                    // Add the request ID to track this specific request
-                    beforeSend: function(xhr) {
-                        xhr.requestId = requestId;
-                        xhr.setRequestHeader('X-Request-ID', requestId);
-                        console.debug('Sending AJAX request with ID:', requestId);
-                    },
-                    success: function(response, status, xhr) {
-                        console.debug('Log food success response for request ID:', xhr.requestId, response);
-                        console.debug('Response contains toast?', response.toast ? 'Yes' : 'No');
-                        
+                    success: function(response) {
                         if (response.success) {
                             if (!summaryExists) {
                                 updateTodaysLog(response.log_entry);
                                 if (response.totals) {
-                                    console.debug('Setting totals with:', response.totals);
                                     setTotals(response.totals);
-                                    
-                                    // ISSUE: This manual toast call is redundant with the ajaxSuccess handler
-                                    // Let's comment it out and add debug
-                                    console.debug('NOT manually showing toast - letting ajaxSuccess handle it');
-                                    // if (response.message) {
-                                    //     console.debug('Showing toast with server message:', response.message);
-                                    //     showToast('✅ ' + response.message);
-                                    // } else {
-                                    //     console.debug('Showing default toast message');
-                                    //     showToast('✅ Food added!');
-                                    // }
                                 } else {
-                                    console.debug('No totals in response');
                                     // Only show this toast manually since it's an edge case
                                     showToast('Unable to update totals. Please refresh the page.', 'warning');
                                 }
-                            } else {
-                                // Let the global ajaxSuccess handler handle this toast
-                                console.debug('Summary exists, letting ajaxSuccess handle toast');
                             }
                             $('#addFoodForm')[0].reset();
                         }
@@ -175,19 +131,11 @@ window.addEventListener('load', function() {
                 url: removeUrl,
                 type: 'POST',
                 success: function(response) {
-                    console.debug('Remove food response:', response);
-                    console.debug('Response contains toast?', response.toast ? 'Yes' : 'No');
-                    
                     if (response.success) {
                         $('tr[data-log-id="' + logId + '"]').remove();
                         if (response.totals) {
                             setTotals(response.totals);
                         }
-                        
-                        // ISSUE: This manual toast call is redundant with the ajaxSuccess handler
-                        // Let's comment it out and add debug
-                        console.debug('NOT manually showing toast - letting ajaxSuccess handle it');
-                        // showToast('✅ Food removed!');
                     }
                 },
                 error: function(xhr, status, error) {
@@ -224,6 +172,12 @@ window.addEventListener('load', function() {
                         summaryExists = true;
                         $('#todaysLogSection').hide();
                         $('#summaryExistsMessage').show();
+                        
+                        // Update the totals if they were returned
+                        if (response.totals) {
+                            // Use the existing setTotals function to update all UI elements
+                            setTotals(response.totals);
+                        }
                     }
                 },
                 error: function() {

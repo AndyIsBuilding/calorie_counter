@@ -14,38 +14,6 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random se
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 app.config['TESTING'] = False  # Default to False, will be set to True in test environment
 
-# Helper function for JSON responses with toast messages
-def toast_response(message, category='success', redirect_url=None, **kwargs):
-    """
-    Create a JSON response with toast message.
-    
-    Args:
-        message (str): The message to display in the toast
-        category (str): The category of the message (success, error, warning, info)
-        redirect_url (str, optional): URL to redirect to after showing the toast
-        **kwargs: Additional data to include in the response
-        
-    Returns:
-        flask.Response: JSON response with toast message
-    """
-    response_data = {
-        'toast': {
-            'message': message,
-            'category': category
-        }
-    }
-    
-    if redirect_url:
-        response_data['redirect'] = redirect_url
-        
-    # Add any additional data
-    response_data.update(kwargs)
-    
-    return jsonify(response_data)
-
-# Remove global constants
-# CALORIE_GOAL = 2000 
-# PROTEIN_GOAL = 220 
 
 class Food(NamedTuple):
     id: int
@@ -276,9 +244,6 @@ def init_db():
     
     conn.commit()
     conn.close()
-    
-    # Run migration for daily_summary table if needed
-    migrate_daily_summary_table()
 
 
 def get_local_date():
@@ -449,7 +414,7 @@ def update_history():
     conn.commit()
     conn.close()
 
-    flash(f'Daily log for {edit_date} updated successfully!', 'success')
+    flash(f'Daily log for {edit_date} updated!', 'success')
     return redirect(url_for('edit_history'))
 
 @app.route('/')
@@ -491,7 +456,7 @@ def quick_add_food():
     return jsonify({
         'success': True,
         'toast': {
-            'message': 'Food added successfully',
+            'message': 'Food added to your quick add list',
             'category': 'success'
         },
         'food': {
@@ -582,6 +547,10 @@ def log_quick_food():
     # Return the log entry and updated totals
     return jsonify({
         'success': True,
+        "toast": {
+            "message": f"Added {name} to your log",
+            "category": "success"
+        },
         'log_entry': {
             'id': log_id,
             'food_name': name,
@@ -612,15 +581,17 @@ def remove_food(log_id):
     conn.commit()
     conn.close()
     
-    return toast_response(
-        message="Food removed successfully",
-        category="success",
-        success=True,
-        totals={
-            'calories': total_calories or 0,
-            'protein': total_protein or 0
+    return jsonify({
+        "success": True,
+        "toast": {
+            "message": "Food removed",
+            "category": "success"
+        },
+        "totals": {
+            "calories": total_calories or 0,
+            "protein": total_protein or 0
         }
-    )
+    })
 
 @app.route('/save_summary', methods=['POST'])
 @login_required
@@ -674,12 +645,15 @@ def save_summary():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'success': True,
-            'message': 'Daily summary updated successfully!',
-            'redirect_url': url_for('dashboard')
+            'message': 'Daily summary updated!',
+            'totals': {
+                'calories': total_calories,
+                'protein': total_protein
+            }
         })
     
     # For non-AJAX requests, use flash and redirect
-    flash('Daily summary updated successfully!', 'success')
+    flash('Daily summary updated!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/export_csv')
@@ -895,7 +869,7 @@ def food_recommendation(total_calories, total_protein):
     eaten_foods = [row[0] for row in c.fetchall()] # a list of tuples in fetchall, extract the food name into list
 
     # Fetch all foods and filter out the ones eaten today
-    foods = c.execute("SELECT * FROM foods").fetchall()
+    foods = c.execute("SELECT * FROM foods WHERE user_id = ?", (current_user.id,)).fetchall()
     available_foods = [Food(id=row[0], name=row[1], calories=row[2], protein=row[3]) for row in foods if row[1] not in eaten_foods]  # row[1] is the food name
     n = len(available_foods)
 
@@ -1106,9 +1080,9 @@ def update_settings():
     # Log the current weight if provided
     if current_weight is not None and current_weight > 0:
         current_user.log_weight(current_weight)
-        flash_message = 'Settings updated and weight logged successfully!'
+        flash_message = 'Settings updated and weight logged!'
     else:
-        flash_message = 'Settings updated successfully!'
+        flash_message = 'Settings updated!'
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1232,12 +1206,12 @@ def remove_quick_add_food():
             return jsonify({
                 'success': True,
                 'toast': {
-                    'message': 'Food removed successfully',
+                    'message': 'Food removed!',
                     'category': 'success'
                 }
             })
         
-        flash('Food removed successfully', 'success')
+        flash('Food removed!', 'success')
         return redirect(url_for('settings'))
     except sqlite3.Error as e:
         conn.rollback()
@@ -1255,50 +1229,6 @@ def remove_quick_add_food():
     finally:
         conn.close()
 
-def migrate_daily_summary_table():
-    """Add a unique constraint on date and user_id in the daily_summary table."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    try:
-        # Check if we need to migrate
-        c.execute("PRAGMA table_info(daily_summary)")
-        columns = c.fetchall()
-        
-        # Create a new table with the unique constraint
-        c.execute('''CREATE TABLE IF NOT EXISTS daily_summary_new
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      date TEXT NOT NULL,
-                      total_calories INTEGER NOT NULL,
-                      total_protein INTEGER NOT NULL,
-                      summary TEXT,
-                      user_id INTEGER NOT NULL,
-                      calorie_goal INTEGER,
-                      protein_goal INTEGER,
-                      FOREIGN KEY (user_id) REFERENCES users(id),
-                      UNIQUE(date, user_id))''')
-        
-        # Copy data from the old table to the new one, keeping only the most recent entry for each date/user
-        c.execute('''INSERT INTO daily_summary_new (date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal)
-                     SELECT date, total_calories, total_protein, summary, user_id, calorie_goal, protein_goal
-                     FROM daily_summary
-                     WHERE id IN (
-                         SELECT MAX(id) 
-                         FROM daily_summary 
-                         GROUP BY date, user_id
-                     )''')
-        
-        # Drop the old table and rename the new one
-        c.execute("DROP TABLE daily_summary")
-        c.execute("ALTER TABLE daily_summary_new RENAME TO daily_summary")
-        
-        conn.commit()
-        print("Successfully migrated daily_summary table to include unique constraint on date and user_id")
-    except Exception as e:
-        conn.rollback()
-        print(f"Error migrating daily_summary table: {e}")
-    finally:
-        conn.close()
 
 @app.after_request
 def add_header(response):

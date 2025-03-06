@@ -16,7 +16,6 @@
         quickAddFood: "{{ url_for('quick_add_food') }}",
         logFood: "{{ url_for('log_food') }}",
         saveSummary: "{{ url_for('save_summary') }}",
-        // removeFood: "{{ url_for('remove_food', log_id='') }}"
         removeFood: "{{ url_for('remove_food', log_id=0) }}".replace('/0', '/')
     };
     
@@ -94,23 +93,8 @@
             </div>
         </div>
 
-        {% if has_summary %}
-        <!-- Message when summary exists -->
-        <div id="summaryExistsMessage" class="mt-8 dashboard-card">
-            <div class="flex items-center justify-between">
-                <h2 class="dashboard-title">Today's Summary</h2>
-                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
-            </div>
-            <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't appear here until you save a new summary.</p>
-            <div class="mt-4">
-                <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
-                <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
-            </div>
-            <button id="saveSummaryBtn" class="mt-4 summary-button py-2 px-4">Update Daily Summary</button>
-        </div>
-        {% else %}
         <!-- Today's Log section -->
-        <div id="todaysLogSection" class="mt-8 dashboard-card">
+        <div id="todaysLogSection" class="mt-8 dashboard-card" {% if has_summary %}style="display: none;"{% endif %}>
             <h2 class="dashboard-title">Today's Log</h2>
             <table class="log-table">
                 <thead>
@@ -142,7 +126,20 @@
             </div>
             <button id="saveSummaryBtn" class="mt-4 summary-button py-2 px-4">Save Daily Summary</button>
         </div>
-        {% endif %}
+
+        <!-- Message when summary exists -->
+        <div id="summaryExistsMessage" class="mt-8 dashboard-card" {% if not has_summary %}style="display: none;"{% endif %}>
+            <div class="flex items-center justify-between">
+                <h2 class="dashboard-title">Today's Summary</h2>
+                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
+            </div>
+            <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't show up in totals until you save a new summary.</p>
+            <div class="mt-4">
+                <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
+                <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
+            </div>
+            <button id="saveSummaryBtn" class="mt-4 summary-button py-2 px-4">Update Daily Summary</button>
+        </div>
     </div>
 </div>
 {% endblock %}

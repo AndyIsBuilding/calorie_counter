@@ -1,5 +1,5 @@
-// Updated showToast function with cleaner code
-function showToast(message, type = 'success', duration = 3000) {
+// Make showToast globally available
+window.showToast = function(message, type = 'success', duration = 3000) {
     // Create toast element
     const toast = document.createElement('div');
     
@@ -34,8 +34,8 @@ function showToast(message, type = 'success', duration = 3000) {
     return toast;
 }
 
-// Helper function to reposition toasts
-function repositionToasts() {
+// Helper function to reposition toasts - also make this global
+window.repositionToasts = function() {
     const toasts = document.querySelectorAll('.toast-notification');
     toasts.forEach((toast, index) => {
         const bottomOffset = 16 + (index * 60);
@@ -80,60 +80,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Create a global namespace for our toast tracking
-    window.TOAST_TRACKER = window.TOAST_TRACKER || {
-        processedResponses: new Set(),
-        requestCount: 0
-    };
-    
-    // Set up AJAX to handle toast responses with better deduplication
-    $(document).off('ajaxSuccess').on('ajaxSuccess', function(event, xhr, settings) {
-        // Increment request counter for debugging
-        window.TOAST_TRACKER.requestCount++;
-        console.log(`[${window.TOAST_TRACKER.requestCount}] ajaxSuccess triggered for URL:`, settings.url);
-        
-        try {
-            const response = JSON.parse(xhr.responseText);
-            
-            // Generate a unique response ID based on URL and response content
-            const responseId = `${settings.url}_${JSON.stringify(response)}`;
-            console.log(`[${window.TOAST_TRACKER.requestCount}] Response ID:`, responseId);
-            console.log(`[${window.TOAST_TRACKER.requestCount}] Already processed:`, window.TOAST_TRACKER.processedResponses.has(responseId));
-            
-            // Check if we've already processed this exact response
-            if (window.TOAST_TRACKER.processedResponses.has(responseId)) {
-                console.log(`[${window.TOAST_TRACKER.requestCount}] Skipping duplicate toast for already processed response`);
-                return;
-            }
-            
-            // Mark this response as processed
-            window.TOAST_TRACKER.processedResponses.add(responseId);
-            console.log(`[${window.TOAST_TRACKER.requestCount}] Added to processed responses. Current size:`, window.TOAST_TRACKER.processedResponses.size);
-            
-            // Clean up the set periodically to prevent memory leaks
-            setTimeout(() => {
-                window.TOAST_TRACKER.processedResponses.delete(responseId);
-                console.log(`Removed ${responseId} from processed responses. Current size:`, window.TOAST_TRACKER.processedResponses.size);
-            }, 5000);
-            
-            if (response.toast) {
-                console.log(`[${window.TOAST_TRACKER.requestCount}] Showing toast:`, response.toast.message);
-                showToast(response.toast.message, response.toast.category);
-                
-                if (response.redirect) {
-                    setTimeout(() => {
-                        window.location.href = response.redirect;
-                    }, 1000);
-                }
-            }
-        } catch (e) {
-            console.log(`[${window.TOAST_TRACKER.requestCount}] Error parsing response or no toast found:`, e);
-        }
-    });
-
     // Set up progress bars
     document.querySelectorAll('.progress-bar-calories, .progress-bar-protein').forEach(bar => {
         const percentage = bar.dataset.percentage;
         bar.style.width = `${percentage}%`;
     });
+});
+
+// Set up a simple global AJAX success handler for toast messages
+// This centralized approach handles all toast messages from server responses
+$(document).off('ajaxSuccess').on('ajaxSuccess', function(event, xhr, settings) {
+    try {
+        const response = JSON.parse(xhr.responseText);
+        
+        // If there's a toast property in the response, show it
+        if (response.toast) {
+            showToast(response.toast.message, response.toast.category);
+            
+            // Handle redirects if included in the response
+            if (response.redirect) {
+                setTimeout(() => {
+                    window.location.href = response.redirect;
+                }, 1000);
+            }
+        }
+    } catch (e) {
+        // Not every response is JSON or has toast data, this is expected
+    }
 });
