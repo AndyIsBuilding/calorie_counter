@@ -295,7 +295,7 @@
     font-weight: 500;
     transition: all 0.2s ease;
     height: 2.5rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.5rem;
 }
 
 /* Form Styles */
@@ -334,6 +334,9 @@
     .navbar-stats {
         display: flex;
         gap: 2rem;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
     }
     
     .navbar-mobile-stats {
@@ -548,7 +551,7 @@
     right: 0;
     background-color: white;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    z-index: 50;
+    z-index: 40;
 }
 
 .navbar-stats {
@@ -564,6 +567,9 @@
     .navbar-stats {
         display: flex;
         gap: 2rem;  /* gap-8 */
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
     }
     
     .navbar-mobile-stats {
@@ -799,4 +805,17 @@
     right: 0;
     padding: 16px;
     z-index: 9999;
+}
+
+/* Button Styles */
+.button-cancel {
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    background-color: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    color: var(--gray-700);
+}
+
+.button-cancel:hover {
+    background-color: var(--gray-200);
 }

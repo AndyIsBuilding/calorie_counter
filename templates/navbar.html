@@ -3,12 +3,12 @@
 <nav class="navbar">
     <div class="container mx-auto px-4">
         <!-- Top bar with logo and menu button -->
-        <div class="flex items-center justify-between h-16">
+        <div class="flex items-center justify-between h-16 relative">
             <!-- Logo -->
             <div class="text-xl font-bold text-primary">HealthVibe</div>
 
             <!-- Nutrition Stats - Hidden on mobile -->
-            <div class="navbar-stats">
+            <div class="navbar-stats hidden md:flex">
                 <div>
                     <div class="text-sm text-gray-600">Calories</div>
                     <div class="text-xl font-bold">
@@ -41,8 +41,8 @@
                 </div>
             </div>
 
-            <!-- Navigation Links - Desktop -->
-            <div class="hidden md:flex space-x-4">
+            <!-- Navigation Links - Desktop Dashboard Route -->
+            <div class="hidden md:flex space-x-0">
                 <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}text-primary border-b-2 border-primary{% endif %}">Dashboard</a>
                 <a href="{{ url_for('history') }}" class="nav-link {% if request.endpoint == 'history' %}text-primary border-b-2 border-primary{% endif %}">History</a>
                 <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}text-primary border-b-2 border-primary{% endif %}">Settings</a>
@@ -58,7 +58,7 @@
             </button>
         </div>
 
-        <!-- Mobile Stats Bar - Always visible on mobile -->
+        <!-- Nutrition Stats - Visible on mobile -->
         <div class="navbar-mobile-stats md:hidden">
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -110,9 +110,9 @@
 <!-- Regular Navbar for other pages -->
 <nav class="navbar">
     <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center h-16">
+        <div class="flex justify-between items-center h-16 relative">
             <div class="text-xl font-bold text-primary">HealthVibe</div>
-            <div class="hidden md:flex space-x-4">
+            <div class="hidden md:flex space-x-0">
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}text-primary border-b-2 border-primary{% endif %}">Dashboard</a>
                 <a href="{{ url_for('history') }}" class="nav-link {% if request.endpoint == 'history' %}text-primary border-b-2 border-primary{% endif %}">History</a>
