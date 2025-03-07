@@ -28,7 +28,7 @@
 <div class="container mx-auto mt-8 p-4">
     <h2 class="page-title">Edit History</h2>
 
-    <form id="edit-form" method="POST" :action="URLS.updateHistory" class="mb-4">
+    <form id="edit-form" method="POST" action="{{ url_for('update_history') }}" class="mb-4">
         <div class="mb-4">
             <label for="date" class="form-label">Select Date:</label>
             <input type="date" 

@@ -66,25 +66,13 @@ class User(UserMixin):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        # Check if weight_unit column exists
-        try:
-            c.execute("SELECT weight_unit FROM users WHERE id = ?", (self.id,))
-            # If we get here, the column exists
-            c.execute("""UPDATE users SET 
-                        calorie_goal = ?, 
-                        protein_goal = ?, 
-                        weight_goal = ?,
-                        weight_unit = ? 
-                        WHERE id = ?""", 
-                    (calorie_goal, protein_goal, weight_goal, weight_unit, self.id))
-        except sqlite3.OperationalError:
-            # Column doesn't exist, just update the other fields
-            c.execute("""UPDATE users SET 
-                        calorie_goal = ?, 
-                        protein_goal = ?, 
-                        weight_goal = ?
-                        WHERE id = ?""", 
-                    (calorie_goal, protein_goal, weight_goal, self.id))
+        c.execute("""UPDATE users SET 
+                    calorie_goal = ?, 
+                    protein_goal = ?, 
+                    weight_goal = ?,
+                    weight_unit = ? 
+                    WHERE id = ?""", 
+                (calorie_goal, protein_goal, weight_goal, weight_unit, self.id))
             
         conn.commit()
         conn.close()
@@ -163,11 +151,16 @@ def load_user(user_id):
     if not current_app.config['TESTING']:
         conn.close()
     
-    # TODO: get rid of this 
     if user:
-        weight_goal = user[5] if len(user) > 5 else None
-        weight_unit = user[6] if len(user) > 6 else 0
-        return User(user[0], user[1], user[3], user[4], weight_goal, weight_unit)
+        # Explicitly map the database columns to User constructor arguments
+        return User(
+            id=user[0],
+            username=user[1],
+            calorie_goal=user[3],
+            protein_goal=user[4],
+            weight_goal=user[5],
+            weight_unit=user[6]
+        )
     return None
 
 def init_db():
@@ -176,12 +169,12 @@ def init_db():
     c = conn.cursor()
     
     # Create users table
-    c.execute('''CREATE TABLE IF NOT EXISTS users
+    c.execute(f'''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT UNIQUE NOT NULL,
                   password TEXT NOT NULL,
-                  calorie_goal INTEGER DEFAULT 2000,
-                  protein_goal INTEGER DEFAULT 100,
+                  calorie_goal INTEGER DEFAULT {DEFAULT_CALORIE_GOAL},
+                  protein_goal INTEGER DEFAULT {DEFAULT_PROTEIN_GOAL},
                   weight_goal REAL,
                   weight_unit INTEGER DEFAULT 0)''')
     
@@ -224,16 +217,6 @@ def init_db():
                   weight REAL NOT NULL,
                   user_id INTEGER NOT NULL,
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
-    
-    # Check if user_id column exists in foods table
-    c.execute("PRAGMA table_info(foods)")
-    columns = c.fetchall()
-    column_names = [column[1] for column in columns]
-    
-    # Add user_id column if it doesn't exist
-    if 'user_id' not in column_names:
-        c.execute("ALTER TABLE foods ADD COLUMN user_id INTEGER")
-        c.execute("UPDATE foods SET user_id = 1")  # Set default user_id to 1 for existing foods
     
     conn.commit()
     conn.close()
@@ -300,10 +283,6 @@ def edit_history():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # Fetch all foods
-    c.execute("SELECT * FROM foods ORDER BY name")
-    foods = c.fetchall()
-    
     # Fetch the daily log for the selected date
     c.execute("""SELECT id, food_name, calories, protein 
                  FROM daily_log
@@ -326,7 +305,6 @@ def edit_history():
     
     return render_template('edit_history.html', 
                            edit_date=edit_date, 
-                           foods=foods, 
                            daily_log=daily_log, 
                            summary=summary)
 
@@ -355,7 +333,7 @@ def update_history():
                      VALUES (?, ?, ?, ?, ?)""", 
                   (edit_date, name, calories, protein, current_user.id))
 
-    # Fetch all foods for the day after updates
+    # Fetch all foods for the day after updating
     c.execute("""SELECT food_name, calories, protein
                  FROM daily_log
                  WHERE date = ? AND user_id = ?
@@ -704,6 +682,7 @@ def login():
                 return render_template('login.html'), 401
 
             # If we get here, login is successful
+            # TODO: fix?
             user_obj = User(user[0], user[1], user[3], user[4])
             login_user(user_obj)
             
@@ -850,7 +829,7 @@ def food_recommendation(total_calories, total_protein):
     """    Compare to pre-set calorie/protein goals; determine remaining calories/protein for the day 
     Recommend based on remaining calories/protein
     Return a list of recommended foods"""
-
+    # TODO: update this algorithm 
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -1054,6 +1033,7 @@ def update_settings():
         return redirect(url_for('settings'))
     
     # Check if weight unit has changed
+    # TODO: fix
     weight_unit_changed = current_user.weight_unit != weight_unit
     
     # Convert weight goal to kg for storage if user is using pounds
@@ -1218,7 +1198,7 @@ def remove_quick_add_food():
     finally:
         conn.close()
 
-
+# TODO
 @app.after_request
 def add_header(response):
     # Add headers to prevent caching of dynamic content
