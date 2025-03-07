@@ -688,7 +688,8 @@ def login():
         
         try:
             c = conn.cursor()
-            c.execute("SELECT * FROM users WHERE username = ?", (username,))
+            # Use COLLATE NOCASE to make the username search case-insensitive
+            c.execute("SELECT * FROM users WHERE username COLLATE NOCASE = ?", (username,))
             user = c.fetchone()
             
             # First check if user exists and password matches
