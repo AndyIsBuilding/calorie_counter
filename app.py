@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, send_file,
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import csv
 import io
@@ -750,7 +750,7 @@ def register():
             conn.commit()
             flash('Registration successful. Please log in.', 'success')
             return redirect(url_for('login'))
-        except sqlite3.Error as e:
+        except sqlite3.Error:
             conn.rollback()
             flash('An error occurred during registration. Please try again.', 'error')
             return redirect(url_for('register'))
@@ -1182,7 +1182,7 @@ def remove_quick_add_food():
         
         flash('Food removed!', 'success')
         return redirect(url_for('settings'))
-    except sqlite3.Error as e:
+    except sqlite3.Error:
         conn.rollback()
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

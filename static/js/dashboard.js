@@ -144,8 +144,8 @@ window.addEventListener('load', function() {
             });
         });
         
-        // Handle Save Summary button click
-        $('#saveSummaryBtn').click(function() {
+        // Handle Save/Update Summary button clicks
+        $('#saveSummaryBtn, #updateSummaryBtn').click(function() {
             const $button = $(this);
             
             // Prevent multiple clicks
@@ -176,6 +176,10 @@ window.addEventListener('load', function() {
                         if (response.totals) {
                             // Use the existing setTotals function to update all UI elements
                             setTotals(response.totals);
+                            
+                            // Also update the totals in the summary section
+                            $('#summaryExistsMessage #total-calories').text(response.totals.calories);
+                            $('#summaryExistsMessage #total-protein').text(response.totals.protein + 'g');
                         }
                     }
                 },
@@ -186,7 +190,12 @@ window.addEventListener('load', function() {
                     // Remove processing state after a short delay
                     setTimeout(function() {
                         $button.removeClass('processing').prop('disabled', false);
-                        $button.html('Update Daily Summary');
+                        // Restore the appropriate button text
+                        if ($button.attr('id') === 'saveSummaryBtn') {
+                            $button.html('Save Daily Summary');
+                        } else {
+                            $button.html('Update Daily Summary');
+                        }
                     }, 500);
                 }
             });
