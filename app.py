@@ -1003,7 +1003,7 @@ def update_settings():
     # Get the new calorie and protein goals from the form
     calorie_goal = request.form.get('calorie_goal', type=int)
     protein_goal = request.form.get('protein_goal', type=int)
-    weight_goal = request.form.get('weight_goal', type=float)
+    weight_goal = request.form.get('weight_goal', type=float)  # This is now the precise value in kg
     current_weight = request.form.get('current_weight', type=float)
     weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
     
@@ -1036,14 +1036,14 @@ def update_settings():
     # TODO: fix
     weight_unit_changed = current_user.weight_unit != weight_unit
     
-    # Convert weight goal to kg for storage if user is using pounds
-    if weight_goal is not None:
+    # Convert current weight to kg for storage if user is using pounds
+    if current_weight is not None and current_weight > 0:
         if weight_unit == 1:  # If user is using pounds
-            # Convert from lbs to kg for storage (1 lb = 0.45359237 kg)
-            weight_goal_kg = weight_goal * 0.45359237
-            weight_goal = weight_goal_kg
+            # Convert from lbs to kg for storage
+            current_weight = current_weight * 0.45359237
     
     # Update the user's goals using the User class method
+    # weight_goal is already in kg from the hidden field
     current_user.update_goals(calorie_goal, protein_goal, weight_goal, weight_unit)
     
     # Log the current weight if provided
@@ -1218,6 +1218,17 @@ def get_db_connection():
     conn = sqlite3.connect(current_app.config['DB_PATH'])
     conn.row_factory = sqlite3.Row
     return conn
+
+@app.route('/test_flash')
+def test_flash():
+    # Flash messages with different categories
+    flash('This is a success message', 'success')
+    flash('This is an error message', 'error')
+    flash('This is a warning message', 'warning')
+    flash('This is an info message', 'info')
+    
+    # Redirect to the index page to see the flashed messages
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     init_db()
