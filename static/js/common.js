@@ -3,8 +3,12 @@ window.showToast = function(message, type = 'success', duration = 3000) {
     // Create toast element
     const toast = document.createElement('div');
     
-    // Set class for styling
-    toast.className = `toast-notification ${type}`;
+    // Set class for styling - map 'message' category to 'info' for proper styling
+    // This ensures Flask's default 'message' category gets proper styling
+    const validTypes = ['success', 'error', 'warning', 'info'];
+    const toastType = validTypes.includes(type) ? type : 'info';
+    
+    toast.className = `toast-notification ${toastType}`;
     
     toast.innerHTML = message;
     

@@ -723,7 +723,7 @@ def login():
                         'success': False,
                         'message': 'Invalid username or password'
                     }), 401
-                flash('Invalid username or password')
+                flash('Invalid username or password', 'error')
                 return render_template('login.html'), 401
 
             # If we get here, login is successful
