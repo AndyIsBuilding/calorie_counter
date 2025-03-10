@@ -8,6 +8,7 @@
 
 {% block content %}
 <div class="w-96 mx-auto mt-20">
+    <img src="{{ url_for('static', filename='icons/calorie_tracking.png') }}" alt="Calorie Tracking" class="w-48 h-48 mb-8 rounded-lg mx-auto block">
     <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">Login</h1>
     
     <form action="{{ url_for('login') }}" method="post" class="space-y-4">

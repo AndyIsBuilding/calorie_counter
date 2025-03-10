@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast(INITIAL_STATE.successMessage, 'success');
     }
 
+    // Get settings form current state 
     const form = document.getElementById('settings-form');
     const saveButton = document.getElementById('save-button');
     const cancelFormButton = document.getElementById('cancel-form-button');
@@ -124,6 +125,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update weight unit labels when the user changes their preference
     weightUnitRadios.forEach(radio => {
         radio.addEventListener('change', function() {
+            console.log('[Weight Unit Change] Event triggered:', {
+                newUnit: this.value,
+                oldUnit: currentWeightUnit,
+                isLbs: this.value === '1',
+                currentWeightValue: currentWeightInput.value,
+                weightGoalValue: weightGoalInput.value,
+                preciseWeightGoal: document.getElementById('weight-goal-precise').value
+            });
+            
             const unitText = this.value === '1' ? 'lbs' : 'kg';
             const newUnit = parseInt(this.value);
             const origUnit = parseInt(originalWeightUnit);
@@ -167,12 +177,34 @@ document.addEventListener('DOMContentLoaded', function() {
             currentWeightUnit = this.value;
             
             checkFormChanged();
+            
+            // Add detailed conversion logging
+            if (newUnit !== origUnit) {
+                console.log('[Weight Conversion] Converting values:', {
+                    weightGoal: {
+                        before: weightGoalInput.value,
+                        preciseKg: preciseKgValue,
+                        conversionFactor: newUnit === 1 ? 2.20462 : 0.45359237,
+                        after: preciseKgValue ? (newUnit === 1 ? (preciseKgValue * 2.20462).toFixed(1) : preciseKgValue.toFixed(1)) : null
+                    },
+                    currentWeight: {
+                        before: currentWeightInput.value,
+                        conversionFactor: newUnit === 1 ? 2.20462 : 0.45359237,
+                        after: currentWeightInput.value ? (newUnit === 1 ? (currentValue * 2.20462).toFixed(1) : (currentValue / 2.20462).toFixed(1)) : null
+                    }
+                });
+            }
         });
     });
     
     // Update the precise value when the display value changes
     weightGoalInput.addEventListener('input', function() {
         const displayValue = parseFloat(this.value);
+        console.log('Weight goal changed:', {
+            displayValue: displayValue,
+            storedValue: document.getElementById('weight-goal-precise').value,
+            unit: currentWeightUnit === '1' ? 'lbs' : 'kg'
+        });
         if (!isNaN(displayValue)) {
             // If in pounds, convert to kg for storage
             if (currentWeightUnit === '1') {

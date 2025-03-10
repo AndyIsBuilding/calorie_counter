@@ -81,29 +81,49 @@ class User(UserMixin):
     
     def log_weight(self, weight, date=None):
         """Log the user's weight for a specific date"""
+        print("[Weight Logging] Starting weight log process:", {
+            'input_weight': weight,
+            'unit': 'lbs' if self.weight_unit == 1 else 'kg',
+            'user_id': self.id,
+            'date': date or 'today'
+        })
+        
         if date is None:
             date = get_local_date().isoformat()
-            
-        # Convert weight to kg for storage if user preference is lbs
-        stored_weight = weight
-        if self.weight_unit == 1:  # If user prefers lbs
-            # Convert lbs to kg for storage (1 lb = 0.45359237 kg)
-            stored_weight = weight * 0.45359237
-            
+        
+        # Add weight value validation
+        print("[Weight Logging] Weight validation:", {
+            'weight_value': weight,
+            'is_numeric': isinstance(weight, (int, float)),
+            'is_positive': weight > 0 if isinstance(weight, (int, float)) else False
+        })
+        
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
         # Check if there's already a weight log for this date
-        c.execute("SELECT id FROM weight_logs WHERE date = ? AND user_id = ?", (date, self.id))
+        c.execute("SELECT id, weight FROM weight_logs WHERE date = ? AND user_id = ?", (date, self.id))
         existing_log = c.fetchone()
         
         if existing_log:
+            print("[Weight Logging] Updating existing log:", {
+                'log_id': existing_log[0],
+                'old_weight': existing_log[1],
+                'new_weight': weight
+            })
+        else:
+            print("[Weight Logging] Creating new log entry:", {
+                'date': date,
+                'weight': weight
+            })
+        
+        if existing_log:
             # Update existing log
-            c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (stored_weight, existing_log[0]))
+            c.execute("UPDATE weight_logs SET weight = ? WHERE id = ?", (weight, existing_log[0]))
         else:
             # Insert new log
             c.execute("INSERT INTO weight_logs (date, weight, user_id) VALUES (?, ?, ?)", 
-                     (date, stored_weight, self.id))
+                     (date, weight, self.id))
         
         conn.commit()
         conn.close()
@@ -112,6 +132,12 @@ class User(UserMixin):
     
     def get_weight_logs(self, limit=30):
         """Get the user's weight logs, limited to the most recent entries"""
+        print("[Weight Retrieval] Starting weight log retrieval:", {
+            'user_id': self.id,
+            'limit': limit,
+            'current_unit_preference': 'lbs' if self.weight_unit == 1 else 'kg'
+        })
+        
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
@@ -121,18 +147,37 @@ class User(UserMixin):
                   (self.id, limit))
         logs = c.fetchall()
         
-        conn.close()
+        print("[Weight Retrieval] Raw database values:", {
+            'log_count': len(logs),
+            'values': [{'date': log[0], 'weight_kg': log[1]} for log in logs]
+        })
         
         # Convert weights to user's preferred unit
         converted_logs = []
         for date, weight in logs:
             if self.weight_unit == 1:  # If user prefers lbs
-                # Convert kg to lbs (1 kg = 2.20462 lbs)
                 converted_weight = round(weight * 2.20462, 1)
+                print("[Weight Retrieval] Converting weight:", {
+                    'date': date,
+                    'original_kg': weight,
+                    'converted_lbs': converted_weight,
+                    'conversion_factor': 2.20462
+                })
                 converted_logs.append((date, converted_weight))
             else:
+                print("[Weight Retrieval] Using kg value as-is:", {
+                    'date': date,
+                    'weight_kg': weight
+                })
                 converted_logs.append((date, weight))
-            
+        
+        print("[Weight Retrieval] Final converted values:", {
+            'log_count': len(converted_logs),
+            'values': [{'date': log[0], 'weight': log[1], 'unit': 'lbs' if self.weight_unit == 1 else 'kg'} 
+                      for log in converted_logs]
+        })
+        
+        conn.close()
         return converted_logs
 
 @login_manager.user_loader
@@ -1032,40 +1077,62 @@ def update_settings():
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
     
-    # Check if weight unit has changed
-    # TODO: fix
-    weight_unit_changed = current_user.weight_unit != weight_unit
-    
-    # Convert current weight to kg for storage if user is using pounds
-    if current_weight is not None and current_weight > 0:
-        if weight_unit == 1:  # If user is using pounds
+    # Handle weight unit changes and conversions
+    print("[Settings Update] Processing weight unit change:", {
+        'previous_unit': current_user.weight_unit,
+        'new_unit': weight_unit,
+        'current_weight_goal': weight_goal
+    })
+
+    if weight_unit != current_user.weight_unit:  # If units are changing
+        if current_user.weight_unit == 0 and weight_unit == 1:  # Switching from kg to lbs
+            # No conversion needed for storage, as the value is already in kg
+            pass
+        elif current_user.weight_unit == 1 and weight_unit == 0:  # Switching from lbs to kg
+            # Convert from lbs to kg
+            if weight_goal is not None:
+                weight_goal = weight_goal / 2.20462
+    else:  # If units aren't changing
+        if weight_unit == 1:  # If using pounds
             # Convert from lbs to kg for storage
-            current_weight = current_weight * 0.45359237
+            if weight_goal is not None:
+                weight_goal = weight_goal / 2.20462
+
+    # Convert current weight if provided
+    if current_weight is not None and current_weight > 0 and weight_unit == 1:
+        current_weight = current_weight / 2.20462
+
+    print("[Settings Update] Final weight values for storage:", {
+        'weight_goal_kg': weight_goal,
+        'current_weight_kg': current_weight,
+        'weight_unit': weight_unit
+    })
     
-    # Update the user's goals using the User class method
-    # weight_goal is already in kg from the hidden field
+    # Update the user's goals with the converted weights
     current_user.update_goals(calorie_goal, protein_goal, weight_goal, weight_unit)
     
-    # Log the current weight if provided
+    # Log the current weight if provided (now in kg)
     if current_weight is not None and current_weight > 0:
+        print("[Settings Update] Processing current weight log:", {
+            'input_weight': current_weight,
+            'unit': 'kg',  # Always kg when storing
+            'user_previous_unit': 'lbs' if current_user.weight_unit == 1 else 'kg'
+        })
         current_user.log_weight(current_weight)
-        flash_message = 'Settings updated and weight logged!'
-    else:
-        flash_message = 'Settings updated!'
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'success': True,
             'toast': {
-                'message': flash_message,
+                'message': 'Settings updated and weight logged!',
                 'category': 'success'
             },
             'redirect': url_for('settings')
         })
     
     # For non-AJAX requests, use flash and redirect
-    flash(flash_message, 'success')
+    flash('Settings updated and weight logged!', 'success')
     return redirect(url_for('settings'))
 
 @app.route('/history')
