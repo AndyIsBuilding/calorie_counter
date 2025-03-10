@@ -194,8 +194,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: 'Calories',
                         data: filteredData.calories,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(39, 76, 119, 0.5)',
+                        borderColor: 'rgba(39, 76, 119, 1)',
                         borderWidth: 1
                     },
                     {
@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         data: filteredData.calorieGoals,
                         type: 'line',
                         fill: false,
-                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderColor: 'rgba(163, 206, 241, 1)',
                         borderWidth: 2,
                         pointRadius: 0
                     }
@@ -263,8 +263,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: 'Protein (g)',
                         data: filteredData.proteins,
-                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(96, 150, 186, 0.5)',
+                        borderColor: 'rgba(96, 150, 186, 1)',
                         borderWidth: 1
                     },
                     {
@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         data: filteredData.proteinGoals,
                         type: 'line',
                         fill: false,
-                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderColor: 'rgba(96, 150, 186, 1)',
                         borderWidth: 2,
                         pointRadius: 0
                     }
@@ -336,8 +336,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         {
                             label: `Weight (${weightUnit})`,
                             data: filteredData.weights,
-                            backgroundColor: 'rgba(255, 159, 64, 0.5)',
-                            borderColor: 'rgba(255, 159, 64, 1)',
+                            backgroundColor: 'rgba(139, 140, 137, 0.5)',
+                            borderColor: 'rgba(139, 140, 137, 1)',
                             borderWidth: 2,
                             pointRadius: 4,
                             pointHoverRadius: 6,
@@ -347,8 +347,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         ...(weightGoal ? [{
                             label: `Weight Goal (${weightUnit})`,
                             data: weightGoalArray,
-                            backgroundColor: 'rgba(201, 203, 207, 0.5)',
-                            borderColor: 'rgba(201, 203, 207, 1)',
+                            backgroundColor: 'rgba(139, 140, 137, 0.5)',
+                            borderColor: 'rgba(139, 140, 137, 1)',
                             borderWidth: 2,
                             borderDash: [5, 5],
                             pointRadius: 0,

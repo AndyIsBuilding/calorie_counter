@@ -68,7 +68,7 @@
         <!-- Recommendations to hit your goals -->    
         <div class="mt-8 dashboard-card">
             <h2 class="dashboard-title">Food Recommendations -- What to eat to hit your goals</h2>
-            <button id="showRecommendationsBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+            <button id="showRecommendationsBtn" class="bg-[#6096BA] hover:bg-[#4A7A9B] text-white font-bold py-2 px-4 rounded">
                 Show Recommendations
             </button>
             <div id="recommendationsContainer" class="mt-4 hidden">
@@ -111,7 +111,7 @@
                         <td class="p-2">{{ log[2] }}</td>
                         <td class="p-2">{{ log[3] }}g</td>
                         <td class="p-2">
-                            <span class="material-symbols-outlined text-red-500 cursor-pointer delete-icon" data-log-id="{{ log[0] }}">delete</span>
+                            <span class="material-symbols-outlined text-[#1F3C5E] cursor-pointer delete-icon" data-log-id="{{ log[0] }}">delete</span>
                         </td>
                     </tr>
                     {% endfor %}
@@ -128,7 +128,7 @@
         <div id="summaryExistsMessage" class="mt-8 dashboard-card" {% if not has_summary %}style="display: none;"{% endif %}>
             <div class="flex items-center justify-between">
                 <h2 class="dashboard-title">Today's Summary</h2>
-                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
+                <span class="bg-[#E7ECEF] text-[#274C77] text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
             </div>
             <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't show up in totals until you save a new summary.</p>
             <div class="mt-4">

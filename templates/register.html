@@ -9,13 +9,13 @@
 {% block content %}
 <div class="w-96 mx-auto mt-20">
     <img src="{{ url_for('static', filename='icons/calorie_tracking.png') }}" alt="Calorie Tracking" class="w-48 h-48 mb-8 rounded-lg mx-auto block">
-    <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">Register</h1>
+    <h1 class="text-3xl font-bold mb-6 text-center text-[#274C77]">Register</h1>
     
     <form action="{{ url_for('register') }}" method="post" class="space-y-4">
         <input type="text" name="username" placeholder="Username" required class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
         <input type="password" name="password" placeholder="Password" required class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition duration-300">Register</button>
+        <button type="submit" class="w-full bg-[#274C77] text-white py-2 rounded-md hover:bg-[#1F3C5E] transition duration-300">Register</button>
     </form>
-    <p class="mt-4 text-center">Already have an account? <a href="{{ url_for('login') }}" class="text-blue-500 hover:underline">Login</a></p>
+    <p class="mt-4 text-center">Already have an account? <a href="{{ url_for('login') }}" class="text-[#274C77] hover:underline">Login</a></p>
 </div>
 {% endblock %}
