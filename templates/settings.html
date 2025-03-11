@@ -78,17 +78,57 @@
         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
             <h2 class="text-2xl font-bold mb-6">User Profile</h2>
             
-            <form id="settings-form" action="{{ url_for('update_settings') }}" method="POST" class="space-y-6">
-                <!-- User Information -->
-                <div class="border-b pb-6">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Account Information</h3>
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
-                        <p class="text-gray-600">{{ current_user.username }}</p>
-                    </div>
-                    <!-- We could add more user profile fields here in the future -->
+            <!-- User Information -->
+            <div class="border-b pb-6">
+                <h3 class="text-lg font-semibold mb-4 text-gray-700">Account Information</h3>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <p class="text-gray-600">{{ current_user.username }}</p>
                 </div>
+                <!-- We could add more user profile fields here in the future -->
+            </div>
+            
+            <!-- Weight Unit Preference Form -->
+            <div class="border-b pb-6 mt-6">
+                <h3 class="text-lg font-semibold mb-4 text-gray-700">Display Preferences</h3>
                 
+                <form id="unit-preference-form" action="{{ url_for('update_settings') }}" method="POST" class="space-y-4">
+                    <!-- Weight Unit Preference -->
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                            Weight Unit Preference
+                        </label>
+                        <div class="flex items-center flex-wrap">
+                            <label class="inline-flex items-center mr-6">
+                                <input type="radio" name="weight_unit" value="0" class="form-radio h-4 w-4 text-[#274C77] weight-unit-radio" 
+                                       {% if current_user.weight_unit == 0 or current_user.weight_unit is none %}checked{% endif %}>
+                                <span class="ml-2">Kilograms (kg)</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="weight_unit" value="1" class="form-radio h-4 w-4 text-[#274C77] weight-unit-radio"
+                                       {% if current_user.weight_unit == 1 %}checked{% endif %}>
+                                <span class="ml-2">Pounds (lbs)</span>
+                            </label>
+                            
+                            <!-- Inline action buttons (hidden by default) -->
+                            <div id="unit-preference-actions" class="ml-6 hidden flex-shrink-0 items-center">
+                                <button type="button" id="save-unit-button" class="text-sm bg-[#274C77] hover:bg-[#1F3C5E] text-white py-1 px-3 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#274C77] focus:ring-opacity-50">
+                                    Save
+                                </button>
+                                <button type="button" id="cancel-unit-button" class="text-sm ml-2 border border-gray-300 text-gray-600 hover:text-gray-800 py-1 px-3 rounded-md transition duration-200 focus:outline-none">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden fields to maintain current values -->
+                    <input type="hidden" name="update_unit_only" value="true">
+                </form>
+            </div>
+            
+            <!-- Nutrition and Weight Goals Form -->
+            <form id="settings-form" action="{{ url_for('update_settings') }}" method="POST" class="space-y-6 mt-6">
                 <!-- Nutrition Goals -->
                 <div class="border-b pb-6">
                     <h3 class="text-lg font-semibold mb-4 text-gray-700">Nutrition Goals</h3>
@@ -122,25 +162,6 @@
                 <div class="border-b pb-6">
                     <h3 class="text-lg font-semibold mb-4 text-gray-700">Weight Tracking</h3>
                     
-                    <!-- Weight Unit Preference -->
-                    <div class="mb-6">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">
-                            Weight Unit Preference
-                        </label>
-                        <div class="flex items-center">
-                            <label class="inline-flex items-center mr-6">
-                                <input type="radio" name="weight_unit" value="0" class="form-radio h-4 w-4 text-[#274C77]" 
-                                       {% if current_user.weight_unit == 0 or current_user.weight_unit is none %}checked{% endif %}>
-                                <span class="ml-2">Kilograms (kg)</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="weight_unit" value="1" class="form-radio h-4 w-4 text-[#274C77]"
-                                       {% if current_user.weight_unit == 1 %}checked{% endif %}>
-                                <span class="ml-2">Pounds (lbs)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
                     <div class="mb-4">
                         <label class="block text-gray-700 text-sm font-bold mb-2" for="current-weight">
                             Current Weight
@@ -171,7 +192,7 @@
                         </div>
                         <!-- Hidden field - always stores the value in the current unit (not necessarily kg) -->
                         <input type="hidden" id="weight-goal-precise" name="weight_goal" 
-                               value="{% if current_user.weight_goal %}{% if current_user.weight_unit == 1 %}{{ (current_user.weight_goal * 2.20462)|round(6) }}{% else %}{{ current_user.weight_goal|round(6) }}{% endif %}{% endif %}">
+                               value="{% if current_user.weight_goal %}{{ current_user.weight_goal|round(6) }}{% endif %}">
                     </div>
                     
                     {% if weight_logs %}
@@ -211,7 +232,7 @@
                     </div>
                 </div>
                 
-                <!-- Save and CancelButton -->
+                <!-- Save and Cancel Button -->
                 <div class="flex justify-end space-x-4">
                     <button type="button" id="cancel-form-button" class="button-cancel py-2 px-6 rounded-md font-bold transition duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">
                         Cancel
@@ -220,6 +241,9 @@
                         Save Changes
                     </button>
                 </div>
+                
+                <!-- Hidden field to indicate this is not a unit update -->
+                <input type="hidden" name="update_unit_only" value="false">
             </form>
         </div>
 

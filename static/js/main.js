@@ -6,7 +6,6 @@ let pollInterval;
 
 // Function to fetch fresh data
 async function fetchFreshData() {
-  console.log('Fetching fresh data...');
   try {
     const response = await fetch('/dashboard');
     const html = await response.text();
@@ -18,14 +17,11 @@ async function fetchFreshData() {
     // Update the food log section only (without totals)
     const foodLog = doc.querySelector('#todaysLogSection');
     if (foodLog) {
-      console.log('Found food log section in response');
       // Get the table body content only
       const tableBody = foodLog.querySelector('#daily-log');
       if (tableBody) {
-        console.log('Found table body in response');
         const currentTableBody = document.querySelector('#daily-log');
         if (currentTableBody) {
-          console.log('Updating table body with new content');
           currentTableBody.innerHTML = tableBody.innerHTML;
         } else {
           console.warn('Could not find current table body in DOM');
@@ -43,21 +39,8 @@ async function fetchFreshData() {
     const calorieGoal = parseInt(doc.querySelector('#calorie-goal')?.textContent || '0');
     const proteinGoal = parseInt(doc.querySelector('#protein-goal')?.textContent || '0');
 
-    console.log('Extracted totals from response:', {
-      totalCalories,
-      totalProtein,
-      calorieGoal,
-      proteinGoal
-    });
-
     // Update navbar stats
     const updateNavbarStats = (totalCalories, totalProtein, calorieGoal, proteinGoal) => {
-      console.log('Current DOM state before navbar update:', {
-        headerCalories: document.querySelector('#header-calories')?.textContent,
-        headerProtein: document.querySelector('#header-protein')?.textContent,
-        totalCalories: document.querySelector('#total-calories')?.textContent,
-        totalProtein: document.querySelector('#total-protein')?.textContent
-      });
 
       // Update desktop header
       const headerCalories = document.querySelector('#header-calories');
@@ -116,12 +99,7 @@ async function fetchFreshData() {
       if (totalCaloriesElement) totalCaloriesElement.textContent = totalCalories;
       if (totalProteinElement) totalProteinElement.textContent = totalProtein + 'g';
 
-      console.log('DOM state after navbar update:', {
-        headerCalories: document.querySelector('#header-calories')?.textContent,
-        headerProtein: document.querySelector('#header-protein')?.textContent,
-        totalCalories: document.querySelector('#total-calories')?.textContent,
-        totalProtein: document.querySelector('#total-protein')?.textContent
-      });
+
     };
 
     // Update navbar stats
@@ -134,19 +112,19 @@ async function fetchFreshData() {
 
 // Start polling when the page loads
 function startPolling() {
-  console.log('Starting polling...');
+
   // Initial fetch
   fetchFreshData();
   
   // Set up polling interval
   pollInterval = setInterval(fetchFreshData, POLL_INTERVAL);
-  console.log('Polling interval set to:', POLL_INTERVAL, 'ms');
+
 }
 
 // Stop polling when the page is hidden
 function stopPolling() {
   if (pollInterval) {
-    console.log('Stopping polling...');
+
     clearInterval(pollInterval);
     pollInterval = null;
   }
@@ -154,16 +132,14 @@ function stopPolling() {
 
 // Handle visibility changes
 document.addEventListener('visibilitychange', () => {
-  console.log('Visibility changed:', document.visibilityState);
+
   if (document.visibilityState === 'visible') {
     // App came into focus, fetch fresh data immediately
-    console.log('Page became visible, fetching fresh data...');
     fetchFreshData();
     // Restart polling
     startPolling();
   } else {
     // App went to background, stop polling
-    console.log('Page hidden, stopping polling...');
     stopPolling();
   }
 });

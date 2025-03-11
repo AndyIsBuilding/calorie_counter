@@ -66,14 +66,24 @@ class User(UserMixin):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        c.execute("""UPDATE users SET 
-                    calorie_goal = ?, 
-                    protein_goal = ?, 
-                    weight_goal = ?,
-                    weight_unit = ? 
-                    WHERE id = ?""", 
-                (calorie_goal, protein_goal, weight_goal, weight_unit, self.id))
-            
+        # Build the SQL query and parameters based on what was provided
+        sql_parts = ["calorie_goal = ?", "protein_goal = ?"]
+        params = [calorie_goal, protein_goal]
+        
+        if weight_goal is not None:
+            sql_parts.append("weight_goal = ?")
+            params.append(weight_goal)
+        
+        if weight_unit is not None:
+            sql_parts.append("weight_unit = ?")
+            params.append(weight_unit)
+        
+        # Complete the SQL query
+        sql = f"UPDATE users SET {', '.join(sql_parts)} WHERE id = ?"
+        params.append(self.id)
+        
+        # Execute the query
+        c.execute(sql, params)
         conn.commit()
         conn.close()
         
@@ -81,22 +91,9 @@ class User(UserMixin):
     
     def log_weight(self, weight, date=None):
         """Log the user's weight for a specific date"""
-        print("[Weight Logging] Starting weight log process:", {
-            'input_weight': weight,
-            'unit': 'lbs' if self.weight_unit == 1 else 'kg',
-            'user_id': self.id,
-            'date': date or 'today'
-        })
         
         if date is None:
             date = get_local_date().isoformat()
-        
-        # Add weight value validation
-        print("[Weight Logging] Weight validation:", {
-            'weight_value': weight,
-            'is_numeric': isinstance(weight, (int, float)),
-            'is_positive': weight > 0 if isinstance(weight, (int, float)) else False
-        })
         
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -104,18 +101,6 @@ class User(UserMixin):
         # Check if there's already a weight log for this date
         c.execute("SELECT id, weight FROM weight_logs WHERE date = ? AND user_id = ?", (date, self.id))
         existing_log = c.fetchone()
-        
-        if existing_log:
-            print("[Weight Logging] Updating existing log:", {
-                'log_id': existing_log[0],
-                'old_weight': existing_log[1],
-                'new_weight': weight
-            })
-        else:
-            print("[Weight Logging] Creating new log entry:", {
-                'date': date,
-                'weight': weight
-            })
         
         if existing_log:
             # Update existing log
@@ -132,11 +117,6 @@ class User(UserMixin):
     
     def get_weight_logs(self, limit=30):
         """Get the user's weight logs, limited to the most recent entries"""
-        print("[Weight Retrieval] Starting weight log retrieval:", {
-            'user_id': self.id,
-            'limit': limit,
-            'current_unit_preference': 'lbs' if self.weight_unit == 1 else 'kg'
-        })
         
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -146,36 +126,15 @@ class User(UserMixin):
                      ORDER BY date DESC LIMIT ?""", 
                   (self.id, limit))
         logs = c.fetchall()
-        
-        print("[Weight Retrieval] Raw database values:", {
-            'log_count': len(logs),
-            'values': [{'date': log[0], 'weight_kg': log[1]} for log in logs]
-        })
-        
+                
         # Convert weights to user's preferred unit
         converted_logs = []
         for date, weight in logs:
             if self.weight_unit == 1:  # If user prefers lbs
                 converted_weight = round(weight * 2.20462, 1)
-                print("[Weight Retrieval] Converting weight:", {
-                    'date': date,
-                    'original_kg': weight,
-                    'converted_lbs': converted_weight,
-                    'conversion_factor': 2.20462
-                })
                 converted_logs.append((date, converted_weight))
             else:
-                print("[Weight Retrieval] Using kg value as-is:", {
-                    'date': date,
-                    'weight_kg': weight
-                })
                 converted_logs.append((date, weight))
-        
-        print("[Weight Retrieval] Final converted values:", {
-            'log_count': len(converted_logs),
-            'values': [{'date': log[0], 'weight': log[1], 'unit': 'lbs' if self.weight_unit == 1 else 'kg'} 
-                      for log in converted_logs]
-        })
         
         conn.close()
         return converted_logs
@@ -609,6 +568,71 @@ def remove_food(log_id):
         }
     })
 
+@app.route('/remove_quick_add_food', methods=['POST'])
+@login_required
+def remove_quick_add_food():
+    food_id = request.form.get('food_id')
+    
+    if not food_id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'No food ID provided',
+                    'category': 'error'
+                }
+            })
+        flash('No food ID provided', 'error')
+        return redirect(url_for('settings'))
+    
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        c = conn.cursor()
+        # First check if the food belongs to the current user
+        c.execute("SELECT id FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
+        if not c.fetchone():
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'toast': {
+                        'message': 'Food not found or unauthorized',
+                        'category': 'error'
+                    }
+                })
+            flash('Food not found or unauthorized', 'error')
+            return redirect(url_for('settings'))
+        
+        # Delete the food
+        c.execute("DELETE FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
+        conn.commit()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'toast': {
+                    'message': 'Food removed!',
+                    'category': 'success'
+                }
+            })
+        
+        flash('Food removed!', 'success')
+        return redirect(url_for('settings'))
+    except sqlite3.Error:
+        conn.rollback()
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'toast': {
+                    'message': 'Database error occurred',
+                    'category': 'error'
+                }
+            })
+        flash('Database error occurred', 'error')
+        return redirect(url_for('settings'))
+    finally:
+        conn.close()
+
 @app.route('/save_summary', methods=['POST'])
 @login_required
 def save_summary():
@@ -727,8 +751,15 @@ def login():
                 return render_template('login.html'), 401
 
             # If we get here, login is successful
-            # TODO: fix?
-            user_obj = User(user[0], user[1], user[3], user[4])
+            # Create user object with all attributes
+            user_obj = User(
+                id=user[0],
+                username=user[1],
+                calorie_goal=user[3],
+                protein_goal=user[4],
+                weight_goal=user[5],
+                weight_unit=user[6]
+            )
             login_user(user_obj)
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -738,7 +769,9 @@ def login():
                     'user': {
                         'username': user_obj.username,
                         'calorie_goal': user_obj.calorie_goal,
-                        'protein_goal': user_obj.protein_goal
+                        'protein_goal': user_obj.protein_goal,
+                        'weight_goal': user_obj.weight_goal,
+                        'weight_unit': user_obj.weight_unit
                     }
                 })
             return redirect(url_for('dashboard'))
@@ -1045,12 +1078,43 @@ def settings():
 @app.route('/update_settings', methods=['POST'])
 @login_required
 def update_settings():
+    # Check if this is a unit preference update only
+    update_unit_only = request.form.get('update_unit_only') == 'true'
+    
+    # Get the weight unit preference
+    weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
+    
+    if update_unit_only:
+        # Only update the weight unit preference
+        # No need to validate or convert any weight values
+        current_user.update_goals(
+            current_user.calorie_goal, 
+            current_user.protein_goal, 
+            weight_goal=None,  # Don't change the weight goal
+            weight_unit=weight_unit
+        )
+        
+        # Check if this is an AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'toast': {
+                    'message': 'Display unit updated!',
+                    'category': 'success'
+                },
+                'redirect': url_for('settings')
+            })
+        
+        # For non-AJAX requests, use flash and redirect
+        flash('Display unit updated!', 'success')
+        return redirect(url_for('settings'))
+    
+    # If not updating only the unit, proceed with full settings update
     # Get the new calorie and protein goals from the form
     calorie_goal = request.form.get('calorie_goal', type=int)
     protein_goal = request.form.get('protein_goal', type=int)
-    weight_goal = request.form.get('weight_goal', type=float)  # This is now the precise value in kg
+    weight_goal = request.form.get('weight_goal', type=float)
     current_weight = request.form.get('current_weight', type=float)
-    weight_unit = request.form.get('weight_unit', type=int, default=0)  # Default to kg (0)
     
     # Validate the input
     if calorie_goal is None or protein_goal is None:
@@ -1077,47 +1141,57 @@ def update_settings():
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
     
-    # Handle weight unit changes and conversions
-    print("[Settings Update] Processing weight unit change:", {
-        'previous_unit': current_user.weight_unit,
-        'new_unit': weight_unit,
-        'current_weight_goal': weight_goal
-    })
-
-    if weight_unit != current_user.weight_unit:  # If units are changing
-        if current_user.weight_unit == 0 and weight_unit == 1:  # Switching from kg to lbs
-            # No conversion needed for storage, as the value is already in kg
-            pass
-        elif current_user.weight_unit == 1 and weight_unit == 0:  # Switching from lbs to kg
-            # Convert from lbs to kg
-            if weight_goal is not None:
-                weight_goal = weight_goal / 2.20462
-    else:  # If units aren't changing
-        if weight_unit == 1:  # If using pounds
+    # Handle weight goal conversion based on whether the weight unit is being updated
+    # or based on the current user's weight unit preference
+    if weight_goal is not None:
+        # If weight_unit is provided in the form (e.g., from a test or API call),
+        # use it to determine the conversion
+        form_weight_unit = request.form.get('weight_unit', type=int)
+        
+        # If form_weight_unit is provided and it's pounds (1), convert from pounds to kg
+        if form_weight_unit is not None and form_weight_unit == 1:
             # Convert from lbs to kg for storage
-            if weight_goal is not None:
+            weight_goal = weight_goal / 2.20462
+        # If no weight_unit in the form, use the current user's preference
+        elif form_weight_unit is None and current_user.weight_unit == 1:
+            # In the UI, the JavaScript already converts to kg, but for API calls
+            # or tests that don't use the UI, we need to convert here
+            # Check if this is an AJAX request from the UI
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # From UI, already converted in JavaScript
+                pass
+            else:
+                # Direct API call or test, convert from lbs to kg
                 weight_goal = weight_goal / 2.20462
 
     # Convert current weight if provided
-    if current_weight is not None and current_weight > 0 and weight_unit == 1:
-        current_weight = current_weight / 2.20462
-
-    print("[Settings Update] Final weight values for storage:", {
-        'weight_goal_kg': weight_goal,
-        'current_weight_kg': current_weight,
-        'weight_unit': weight_unit
-    })
+    if current_weight is not None and current_weight > 0:
+        # Similar logic for current_weight
+        form_weight_unit = request.form.get('weight_unit', type=int)
+        
+        if form_weight_unit is not None and form_weight_unit == 1:
+            # Convert from lbs to kg for storage
+            current_weight = current_weight / 2.20462
+        elif form_weight_unit is None and current_user.weight_unit == 1:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # From UI, already converted in JavaScript
+                pass
+            else:
+                # Direct API call or test, convert from lbs to kg
+                current_weight = current_weight / 2.20462
     
     # Update the user's goals with the converted weights
-    current_user.update_goals(calorie_goal, protein_goal, weight_goal, weight_unit)
+    # If weight_unit is provided in the form, use it, otherwise don't change it
+    form_weight_unit = request.form.get('weight_unit', type=int)
+    current_user.update_goals(
+        calorie_goal, 
+        protein_goal, 
+        weight_goal=weight_goal, 
+        weight_unit=form_weight_unit  # This will be None if not provided in the form
+    )
     
     # Log the current weight if provided (now in kg)
     if current_weight is not None and current_weight > 0:
-        print("[Settings Update] Processing current weight log:", {
-            'input_weight': current_weight,
-            'unit': 'kg',  # Always kg when storing
-            'user_previous_unit': 'lbs' if current_user.weight_unit == 1 else 'kg'
-        })
         current_user.log_weight(current_weight)
     
     # Check if this is an AJAX request
@@ -1200,70 +1274,30 @@ def history():
                           weight_goal=weight_goal,
                           weight_unit=weight_unit)
 
-@app.route('/remove_quick_add_food', methods=['POST'])
+@app.route('/update_weight_unit', methods=['POST'])
 @login_required
-def remove_quick_add_food():
-    food_id = request.form.get('food_id')
-    
-    if not food_id:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({
-                'success': False,
-                'toast': {
-                    'message': 'No food ID provided',
-                    'category': 'error'
-                }
-            })
-        flash('No food ID provided', 'error')
-        return redirect(url_for('settings'))
-    
-    conn = sqlite3.connect(DB_PATH)
+def update_weight_unit():
     try:
-        c = conn.cursor()
-        # First check if the food belongs to the current user
-        c.execute("SELECT id FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
-        if not c.fetchone():
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'success': False,
-                    'toast': {
-                        'message': 'Food not found or unauthorized',
-                        'category': 'error'
-                    }
-                })
-            flash('Food not found or unauthorized', 'error')
-            return redirect(url_for('settings'))
+        weight_unit = int(request.form.get('weight_unit', 0))  # Default to kg (0)
         
-        # Delete the food
-        c.execute("DELETE FROM foods WHERE id = ? AND user_id = ?", (food_id, current_user.id))
-        conn.commit()
+        # Update only the weight unit preference
+        current_user.update_goals(
+            current_user.calorie_goal, 
+            current_user.protein_goal, 
+            weight_goal=None,  # Don't change the weight goal
+            weight_unit=weight_unit
+        )
         
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({
-                'success': True,
-                'toast': {
-                    'message': 'Food removed!',
-                    'category': 'success'
-                }
-            })
-        
-        flash('Food removed!', 'success')
-        return redirect(url_for('settings'))
-    except sqlite3.Error:
-        conn.rollback()
-
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({
-                'success': False,
-                'toast': {
-                    'message': 'Database error occurred',
-                    'category': 'error'
-                }
-            })
-        flash('Database error occurred', 'error')
-        return redirect(url_for('settings'))
-    finally:
-        conn.close()
+        return jsonify({
+            'success': True,
+            'message': 'Weight unit preference updated successfully!'
+        })
+    except Exception as e:
+        app.logger.error(f"Error updating weight unit: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to update weight unit preference.'
+        }), 400
 
 # TODO
 @app.after_request
@@ -1286,13 +1320,6 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.route('/test_flash')
-def test_flash():
-    # Flash messages with different categories
-    flash('This is a success message', 'success')
-    flash('This is an error message', 'error')
-    flash('This is a warning message', 'warning')
-    flash('This is an info message', 'info')
     
     # Redirect to the index page to see the flashed messages
     return redirect(url_for('index'))
