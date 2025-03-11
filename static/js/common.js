@@ -97,8 +97,8 @@ $(document).off('ajaxSuccess').on('ajaxSuccess', function(event, xhr, settings) 
     try {
         const response = JSON.parse(xhr.responseText);
         
-        // If there's a toast property in the response, show it
-        if (response.toast) {
+        // If there's a toast property in the response, show it (unless skipDisplay is true)
+        if (response.toast && !response.toast.skipDisplay) {
             showToast(response.toast.message, response.toast.category);
             
             // Handle redirects if included in the response
@@ -107,6 +107,11 @@ $(document).off('ajaxSuccess').on('ajaxSuccess', function(event, xhr, settings) 
                     window.location.href = response.redirect;
                 }, 1000);
             }
+        } else if (response.redirect) {
+            // Still handle redirects even if toast is skipped
+            setTimeout(() => {
+                window.location.href = response.redirect;
+            }, 1000);
         }
     } catch (e) {
         // Not every response is JSON or has toast data, this is expected

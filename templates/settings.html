@@ -182,7 +182,7 @@
                             Weight Goal
                         </label>
                         <div class="flex items-center">
-                            <input type="number" step="0.1" id="weight-goal" name="weight_goal_display" 
+                            <input type="number" step="0.1" id="weight-goal" name="weight_goal" 
                                 value="{% if current_user.weight_goal %}{% if current_user.weight_unit == 1 %}{{ (current_user.weight_goal * 2.20462)|round(1) }}{% else %}{{ current_user.weight_goal|round(1) }}{% endif %}{% endif %}"
                                 placeholder="Enter your target weight" 
                                 class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -190,9 +190,9 @@
                                 {% if current_user.weight_unit == 1 %}lbs{% else %}kg{% endif %}
                             </span>
                         </div>
-                        <!-- Hidden field - always stores the value in the current unit (not necessarily kg) -->
-                        <input type="hidden" id="weight-goal-precise" name="weight_goal" 
-                               value="{% if current_user.weight_goal %}{{ current_user.weight_goal|round(6) }}{% endif %}">
+                        <!-- Hidden field to pass the current display unit to the backend -->
+                        <input type="hidden" id="current_display_unit" name="current_display_unit" 
+                               value="{{ current_user.weight_unit }}">
                     </div>
                     
                     {% if weight_logs %}

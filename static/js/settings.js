@@ -20,11 +20,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentWeightInput = document.getElementById('current-weight');
     const weightGoalInput = document.getElementById('weight-goal');
     
-    // Store initial values
-    const originalCalorieValue = INITIAL_STATE.calorieGoal.toString();
-    const originalProteinValue = INITIAL_STATE.proteinGoal.toString();
-    const originalWeightGoalValue = INITIAL_STATE.weightGoal ? INITIAL_STATE.weightGoal.toString() : '';
-    const originalWeightUnit = INITIAL_STATE.weightUnit;
+    // Store initial values - using let for values that might need to be updated
+    let originalCalorieValue = INITIAL_STATE.calorieGoal.toString();
+    let originalProteinValue = INITIAL_STATE.proteinGoal.toString();
+    let originalWeightGoalValue = INITIAL_STATE.weightGoal ? INITIAL_STATE.weightGoal.toString() : '';
+    const originalWeightUnit = INITIAL_STATE.weightUnit; // This stays constant
     let currentWeightUnit = originalWeightUnit.toString();
     
     // Debug info
@@ -96,7 +96,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function checkFormChanged() {
         const calorieChanged = calorieInput.value !== originalCalorieValue;
         const proteinChanged = proteinInput.value !== originalProteinValue;
-        const weightGoalChanged = weightGoalInput.value !== originalWeightGoalValue;
+        const weightGoalChanged = weightGoalInput.value !== (originalWeightUnit === 1 && originalWeightGoalValue ? 
+            (parseFloat(originalWeightGoalValue) * 2.20462).toFixed(1) : originalWeightGoalValue);
         const currentWeightEntered = currentWeightInput.value.trim() !== '';
         
         if (calorieChanged || proteinChanged || weightGoalChanged || currentWeightEntered) {
@@ -131,13 +132,10 @@ document.addEventListener('DOMContentLoaded', function() {
         calorieInput.value = originalCalorieValue;
         proteinInput.value = originalProteinValue;
         
-        // Reset weight goal
+        // Reset weight goal - display in the current unit (kg or lbs)
         weightGoalInput.value = originalWeightUnit === 1 && originalWeightGoalValue ? 
             (parseFloat(originalWeightGoalValue) * 2.20462).toFixed(1) : 
             originalWeightGoalValue;
-        
-        // Reset hidden weight goal field
-        document.getElementById('weight-goal-precise').value = originalWeightGoalValue;
         
         // Clear current weight input
         currentWeightInput.value = '';
@@ -198,25 +196,24 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Only convert if the unit actually changed
             if (newUnit !== origUnit) {
-                // Get the precise value in kg from the hidden field
-                const preciseKgValue = parseFloat(document.getElementById('weight-goal-precise').value);
-                
-                // Convert weight goal display value when unit changes
-                if (!isNaN(preciseKgValue)) {
-                    if (newUnit === 1) {
+                // Get the current weight goal value
+                if (weightGoalInput.value && !isNaN(parseFloat(weightGoalInput.value))) {
+                    const currentValue = parseFloat(weightGoalInput.value);
+                    
+                    if (newUnit === 1 && origUnit === 0) {
                         // Convert from kg to lbs for display
-                        const lbsValue = (preciseKgValue * 2.20462).toFixed(1);
+                        const lbsValue = (currentValue * 2.20462).toFixed(1);
                         weightGoalInput.value = lbsValue;
-                        console.log('Converting display from kg to lbs:', {
-                            preciseKgValue,
+                        console.log('Converting weight goal from kg to lbs:', {
+                            currentValue,
                             lbsValue
                         });
-                    } else {
-                        // Display kg value (rounded for display)
-                        const kgValue = preciseKgValue.toFixed(1);
+                    } else if (newUnit === 0 && origUnit === 1) {
+                        // Convert from lbs to kg for display
+                        const kgValue = (currentValue / 2.20462).toFixed(1);
                         weightGoalInput.value = kgValue;
-                        console.log('Display in kg (no conversion):', {
-                            preciseKgValue,
+                        console.log('Converting weight goal from lbs to kg:', {
+                            currentValue,
                             kgValue
                         });
                     }
@@ -246,39 +243,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Update current_display_unit hidden field
+            document.getElementById('current_display_unit').value = this.value;
+            
             currentWeightUnit = this.value;
             console.log('Updated currentWeightUnit:', currentWeightUnit);
             checkUnitPreferenceChanged();
         });
     });
     
-    // Update the precise value when the display value changes
+    // No need to update a hidden field - we're sending the raw input value to the backend
     weightGoalInput.addEventListener('input', function() {
-        const displayValue = parseFloat(this.value);
-
-        if (!isNaN(displayValue)) {
-            // If in pounds, convert to kg for storage
-            if (currentWeightUnit === '1') {
-                // Convert from pounds to kg for storage
-                const kgValue = displayValue / 2.20462;
-                document.getElementById('weight-goal-precise').value = kgValue.toString();
-                console.log('Converting weight goal from lbs to kg for storage:', {
-                    displayValue,
-                    kgValue,
-                    currentWeightUnit
-                });
-            } else {
-                // Store as is (already in kg)
-                document.getElementById('weight-goal-precise').value = displayValue.toString();
-                console.log('Weight goal in kg (no conversion needed):', {
-                    displayValue,
-                    currentWeightUnit
-                });
-            }
-        } else {
-            document.getElementById('weight-goal-precise').value = '';
-            console.log('Clearing weight goal value');
-        }
         checkFormChanged();
     });
     
@@ -381,26 +356,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset current weight unit
         currentWeightUnit = originalWeightUnit.toString();
         
+        // Update the hidden field
+        document.getElementById('current_display_unit').value = originalWeightUnit.toString();
+        
         // Hide action buttons
         unitPreferenceActions.classList.add('hidden');
         
-        // Revert any conversions that might have happened
-        const preciseKgValue = parseFloat(document.getElementById('weight-goal-precise').value);
-        if (!isNaN(preciseKgValue)) {
-            if (originalWeightUnit.toString() === '1') {
-                // Display in lbs
-                weightGoalInput.value = (preciseKgValue * 2.20462).toFixed(1);
-            } else {
-                // Display in kg
-                weightGoalInput.value = preciseKgValue.toFixed(1);
-            }
-        }
-        
-        // Also revert current weight if it has a value
-        if (currentWeightInput.value && !isNaN(parseFloat(currentWeightInput.value))) {
-            // We need to convert back to the original unit
-            // This is a bit tricky since we don't store the original value
-            // For simplicity, we'll reload the page
+        // Since we now have conversions happening in the UI, we need to reload
+        // to ensure the values are correctly displayed in the original unit
+        if (weightGoalInput.value || currentWeightInput.value) {
+            // For simplicity, we'll reload the page to reset all values
             window.location.reload();
             return;
         }
@@ -425,9 +390,13 @@ document.addEventListener('DOMContentLoaded', function() {
         confirmationModal.classList.add('hidden');
     });
     
-    // Confirm button submits the form
+    // Confirm button submits the form via AJAX
     confirmButton.addEventListener('click', function() {
-        settingsForm.submit();
+        // Hide the modal
+        confirmationModal.classList.add('hidden');
+        
+        // Use the common function for AJAX submission
+        submitFormViaAjax();
     });
     
     // Add input event listeners
@@ -447,9 +416,14 @@ document.addEventListener('DOMContentLoaded', function() {
         checkFormChanged();
     });
 
-    // Form submission with AJAX
-    settingsForm.addEventListener('submit', function(e) {
-        e.preventDefault();
+    // Create a function for form submission via AJAX to avoid duplication
+    function submitFormViaAjax() {
+        // First, show processing state
+        const saveBtn = document.getElementById('save-button');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
         
         $.ajax({
             url: URLS.updateSettings,
@@ -460,23 +434,48 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             success: function(response) {
                 if (response.success) {
-                    // Update original values
+                    // Update original values to match current form values
                     originalCalorieValue = calorieInput.value;
                     originalProteinValue = proteinInput.value;
-                    originalWeightGoalValue = document.getElementById('weight-goal-precise').value;
+                    originalWeightGoalValue = weightGoalInput.value;
                     
                     // Clear current weight input
                     currentWeightInput.value = '';
                     
                     // Reset form changed state
                     settingsForm.classList.remove('settings-form-changed');
+                    
+                    // Add a visual indication that the form was saved
+                    settingsForm.classList.add('form-saved');
+                    setTimeout(() => {
+                        settingsForm.classList.remove('form-saved');
+                    }, 1500);
+                    
+                    // Show success toast
+                    showToast('Settings updated successfully!', 'success');
+                    
+                    // Run checkFormChanged to update UI state
+                    checkFormChanged();
                 }
             },
             error: function(xhr, status, error) {
                 console.error('Settings update error:', {xhr, status, error});
                 showToast('An error occurred. Please try again.', 'error');
+            },
+            complete: function() {
+                // Reset button state
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Changes';
+                }
             }
         });
+    }
+    
+    // Form submission with AJAX
+    settingsForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitFormViaAjax();
     });
 
     // Set up progress bars

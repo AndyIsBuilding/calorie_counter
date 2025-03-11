@@ -477,6 +477,18 @@
   transition: background-color 0.3s ease;
 }
 
+.form-saved {
+  background-color: #ecfdf5; /* Light green background */
+  transition: background-color 0.3s ease;
+  animation: pulse 1s;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
 /* Navbar Progress Bars */
 .progress-container {
     width: 100%;

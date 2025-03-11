@@ -7,7 +7,12 @@ import pytz
 import csv
 import io
 import os
+import logging
 from typing import NamedTuple
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG if os.environ.get('DEBUG') else logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
@@ -1143,7 +1148,8 @@ def update_settings():
                 'success': True,
                 'toast': {
                     'message': 'Display unit updated!',
-                    'category': 'success'
+                    'category': 'success',
+                    'skipDisplay': True  # Tell the JavaScript not to show this toast
                 },
                 'redirect': url_for('settings')
             })
@@ -1184,48 +1190,35 @@ def update_settings():
         flash('Calorie and protein goals must be positive numbers.', 'error')
         return redirect(url_for('settings'))
     
-    # Handle weight goal conversion based on whether the weight unit is being updated
-    # or based on the current user's weight unit preference
+    # Handle weight goal conversion - the frontend now sends the raw input value
+    # and a display unit indicator, so we always need to convert if the unit is pounds
     if weight_goal is not None:
-        # If weight_unit is provided in the form (e.g., from a test or API call),
-        # use it to determine the conversion
-        form_weight_unit = request.form.get('weight_unit', type=int)
+        # Get the current display unit from the form
+        display_unit = request.form.get('current_display_unit', type=int, default=current_user.weight_unit)
         
-        # If form_weight_unit is provided and it's pounds (1), convert from pounds to kg
-        if form_weight_unit is not None and form_weight_unit == 1:
-            # Convert from lbs to kg for storage
+        # Convert to kg if the display unit is pounds (1)
+        if display_unit == 1:
             weight_goal = weight_goal / 2.20462
-        # If no weight_unit in the form, use the current user's preference
-        elif form_weight_unit is None and current_user.weight_unit == 1:
-            # In the UI, the JavaScript already converts to kg, but for API calls
-            # or tests that don't use the UI, we need to convert here
-            # Check if this is an AJAX request from the UI
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                # From UI, already converted in JavaScript
-                pass
-            else:
-                # Direct API call or test, convert from lbs to kg
-                weight_goal = weight_goal / 2.20462
+            logger.debug(f"Converting weight goal from lbs to kg: {weight_goal}")
 
     # Convert current weight if provided
     if current_weight is not None and current_weight > 0:
-        # Similar logic for current_weight
-        form_weight_unit = request.form.get('weight_unit', type=int)
+        # Get the current display unit from the form
+        display_unit = request.form.get('current_display_unit', type=int, default=current_user.weight_unit)
         
-        if form_weight_unit is not None and form_weight_unit == 1:
-            # Convert from lbs to kg for storage
+        # Convert to kg if the display unit is pounds (1)
+        if display_unit == 1:
             current_weight = current_weight / 2.20462
-        elif form_weight_unit is None and current_user.weight_unit == 1:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                # From UI, already converted in JavaScript
-                pass
-            else:
-                # Direct API call or test, convert from lbs to kg
-                current_weight = current_weight / 2.20462
+            logger.debug(f"Converting current weight from lbs to kg: {current_weight}")
     
     # Update the user's goals with the converted weights
     # If weight_unit is provided in the form, use it, otherwise don't change it
     form_weight_unit = request.form.get('weight_unit', type=int)
+    
+    # Debug the final values before updating
+    logger.debug(f"Updating user goals: calorie_goal={calorie_goal}, protein_goal={protein_goal}, " +
+                f"weight_goal={weight_goal}, weight_unit={form_weight_unit}")
+    
     current_user.update_goals(
         calorie_goal, 
         protein_goal, 
@@ -1242,14 +1235,15 @@ def update_settings():
         return jsonify({
             'success': True,
             'toast': {
-                'message': 'Settings updated and weight logged!',
-                'category': 'success'
+                'message': 'Settings updated!',
+                'category': 'success',
+                'skipDisplay': True  # Tell the JavaScript not to show this toast
             },
             'redirect': url_for('settings')
         })
     
     # For non-AJAX requests, use flash and redirect
-    flash('Settings updated and weight logged!', 'success')
+    flash('Settings updated (flash)!', 'success')
     return redirect(url_for('settings'))
 
 @app.route('/history')
