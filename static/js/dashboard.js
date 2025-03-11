@@ -213,7 +213,7 @@ function updateTodaysLog(logEntry) {
             '<td class="p-2">' + logEntry.calories + '</td>' +
             '<td class="p-2">' + logEntry.protein + 'g</td>' +
             '<td class="p-2">' +
-                '<span class="material-symbols-outlined text-red-500 cursor-pointer delete-icon" data-log-id="' + logEntry.id + '">delete</span>' +
+                '<span class="material-symbols-outlined text-[#1F3C5E] cursor-pointer delete-icon" data-log-id="' + logEntry.id + '">delete</span>' +
             '</td>' +
         '</tr>'
     );
@@ -333,7 +333,7 @@ function setTotals(totals) {
 
 function addQuickAddButton(food) {
     $('.quick-add-grid').append(
-        '<button type="button" class="quick-add-button w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-blue-500 text-sm border-2 border-blue-500 hover:text-white" data-food-id="' + food.id + '">' +
+        '<button type="button" class="quick-add-button w-full py-2 px-4 text-sm" data-food-id="' + food.id + '">' +
             food.name +
         '</button>'
     );

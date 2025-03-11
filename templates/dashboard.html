@@ -133,7 +133,7 @@
                 <h2 class="dashboard-title">Today's Summary</h2>
                 <span class="bg-[#E7ECEF] text-[#274C77] text-xs font-medium px-2.5 py-0.5 rounded">Saved</span>
             </div>
-            <p class="mt-4 text-gray-600">You've already saved a summary for today. New foods you log will still be tracked, but won't show up in totals until you save a new summary.</p>
+            <p class="mt-4 text-gray-600">Your daily summary for today is saved and shown in <a href="{{ url_for('history') }}">history</a>. New foods you log will still be tracked, but won't show up in totals until you save a new summary.</p>
             <div class="mt-4">
                 <p class="font-bold">Total Calories: <span id="total-calories">{{ total_calories }}</span></p>
                 <p class="font-bold">Total Protein: <span id="total-protein">{{ total_protein }}g</span></p>
