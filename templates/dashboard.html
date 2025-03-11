@@ -27,6 +27,9 @@
 <!-- Load dashboard.js after defining URLs -->
 <script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ range(1, 10000) | random }}"></script>
 
+<!-- Load main.js for real-time updates -->
+<script src="{{ url_for('static', filename='js/main.js') }}?v={{ range(1, 10000) | random }}"></script>
+
 {% endblock %}
 
 {% block content %}

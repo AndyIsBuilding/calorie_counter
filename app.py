@@ -271,6 +271,49 @@ def dashboard():
                           protein_goal=current_user.protein_goal,
                           has_summary=has_summary)
 
+@app.route('/api/dashboard-stats')
+@login_required
+def dashboard_stats():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get today's date in the user's timezone
+    today = get_local_date().isoformat()
+    
+    # Get today's log
+    c.execute("""SELECT id, food_name, calories, protein 
+                 FROM daily_log 
+                 WHERE date = ? AND user_id = ?""", 
+              (today, current_user.id))
+    daily_log = c.fetchall()
+    
+    # Format the daily log for JSON
+    formatted_log = [
+        {
+            'id': entry[0],
+            'food_name': entry[1],
+            'calories': entry[2],
+            'protein': entry[3]
+        }
+        for entry in daily_log
+    ]
+    
+    # Calculate totals
+    total_calories = sum(log[2] for log in daily_log)
+    total_protein = sum(log[3] for log in daily_log)
+    
+    conn.close()
+    
+    return jsonify({
+        'daily_log': formatted_log,
+        'stats': {
+            'total_calories': total_calories,
+            'total_protein': total_protein,
+            'calorie_goal': current_user.calorie_goal,
+            'protein_goal': current_user.protein_goal
+        }
+    })
+
 @app.route('/edit_history')
 @login_required
 def edit_history():
