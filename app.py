@@ -1,8 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, get_flashed_messages, current_app
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, get_flashed_messages, current_app, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import csv
 import io
@@ -18,6 +18,7 @@ app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  # Change this to a random secret key
 app.config['TIMEZONE'] = os.getenv('TIMEZONE') 
 app.config['TESTING'] = False  # Default to False, will be set to True in test environment
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 
 class Food(NamedTuple):
@@ -808,7 +809,9 @@ def login():
                 weight_goal=user[5],
                 weight_unit=user[6]
             )
-            login_user(user_obj)
+            # Make the session permanent to last for PERMANENT_SESSION_LIFETIME
+            session.permanent = True
+            login_user(user_obj, remember=True)
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
