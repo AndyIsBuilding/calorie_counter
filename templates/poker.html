@@ -1,0 +1,342 @@
+{% extends "layout.html" %}
+
+{% block title %}Poker Stats - HealthVibe{% endblock %}
+
+{% block navbar %}
+    {% include 'navbar.html' %}
+{% endblock %}
+
+{% block content %}
+
+<div class="max-w-7xl mx-auto">
+    <!-- Session Info Header -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div class="flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Poker Statistics Tracker</h1>
+                {% if session %}
+                <p class="text-sm text-gray-600 mt-1">
+                    Hand: <span id="hand-count">{{ session.hand_count }}</span> | 
+                    Started: {{ session.created_at[:10] }}
+                </p>
+                {% endif %}
+            </div>
+            <div class="flex gap-2">
+                {% if session %}
+                <button id="skip-hand-btn" class="btn btn-secondary">Skip Hand</button>
+                <button id="end-session-btn" class="btn btn-error">End Session</button>
+                {% else %}
+                <button id="start-session-btn" class="btn btn-primary">Start Session</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if session %}
+    <!-- Quick Tips Banner -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div class="text-sm">
+                <p class="font-semibold text-blue-900 mb-1">Quick Setup Tips:</p>
+                <ul class="text-gray-700 space-y-1">
+                    <li><strong>Remove empty seats:</strong> Click seat → "Remove Player"</li>
+                    <li><strong>Update names:</strong> Click seat → "Name This Player" (saves to database for future sessions)</li>
+                    <li><strong>Load known players:</strong> Click empty seat → Search by name</li>
+                    <li><strong>Ready?</strong> Once your table matches the real game, start playing hands!</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Straddle Controls (shown when no active hand) -->
+    <div id="straddle-controls" class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div class="flex items-center gap-4 flex-wrap">
+            <h3 class="font-semibold text-gray-900">Start New Hand:</h3>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="btn-straddle-toggle" class="w-4 h-4">
+                <span class="text-sm">Button Straddle</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="utg-straddle-toggle" class="w-4 h-4">
+                <span class="text-sm">UTG Straddle</span>
+            </label>
+            <button id="start-hand-btn" class="btn btn-primary ml-auto">Start Hand</button>
+        </div>
+    </div>
+
+    <!-- Action Controls (shown during active hand) -->
+    <div id="action-controls" class="bg-white rounded-lg shadow-md p-4 mb-6 hidden">
+        <div class="flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+                <h3 class="font-semibold text-gray-900">
+                    Current Action: <span id="current-action-player" class="text-blue-600"></span>
+                </h3>
+                <button id="undo-action-btn" class="btn btn-secondary btn-sm">Undo Last Action</button>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button class="action-btn btn btn-secondary" data-action="fold">Fold</button>
+                <button class="action-btn btn btn-primary" data-action="call">Call</button>
+                <button class="action-btn btn btn-success" data-action="raise">Raise</button>
+                <button class="action-btn btn btn-warning" data-action="skip">Skip</button>
+                <button id="complete-hand-btn" class="btn btn-primary ml-auto">Complete Hand</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Poker Table -->
+    <div class="poker-table-container bg-gradient-to-br from-green-700 to-green-900 rounded-lg shadow-2xl p-8 relative">
+        <!-- Dealer Position Marker -->
+        <div class="dealer-marker absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
+            <span class="text-2xl font-bold text-gray-700">D</span>
+        </div>
+
+        <!-- Poker Table Seats -->
+        <div class="poker-table relative">
+            <!-- Seat 1: Top Left -->
+            <div class="poker-seat" data-seat="1" style="top: 5%; left: 15%;">
+                <div class="seat-content">
+                    <div class="seat-number">1</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 2: Top Center Left -->
+            <div class="poker-seat" data-seat="2" style="top: 5%; left: 35%;">
+                <div class="seat-content">
+                    <div class="seat-number">2</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 3: Top Center Right -->
+            <div class="poker-seat" data-seat="3" style="top: 5%; left: 55%;">
+                <div class="seat-content">
+                    <div class="seat-number">3</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 4: Top Right -->
+            <div class="poker-seat" data-seat="4" style="top: 5%; left: 75%;">
+                <div class="seat-content">
+                    <div class="seat-number">4</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 5: Right Side -->
+            <div class="poker-seat" data-seat="5" style="top: 35%; right: 5%;">
+                <div class="seat-content">
+                    <div class="seat-number">5</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 6: Bottom Right -->
+            <div class="poker-seat" data-seat="6" style="bottom: 5%; left: 75%;">
+                <div class="seat-content">
+                    <div class="seat-number">6</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 7: Bottom Center Right -->
+            <div class="poker-seat" data-seat="7" style="bottom: 5%; left: 55%;">
+                <div class="seat-content">
+                    <div class="seat-number">7</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 8: Bottom Center Left -->
+            <div class="poker-seat" data-seat="8" style="bottom: 5%; left: 35%;">
+                <div class="seat-content">
+                    <div class="seat-number">8</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+
+            <!-- Seat 9: Bottom Left -->
+            <div class="poker-seat" data-seat="9" style="bottom: 5%; left: 15%;">
+                <div class="seat-content">
+                    <div class="seat-number">9</div>
+                    <div class="player-info hidden">
+                        <div class="player-name"></div>
+                        <div class="player-stats">
+                            <span class="stat-label">Session:</span>
+                            <span class="session-vpip">-</span>/<span class="session-pfr">-</span>
+                        </div>
+                        <div class="player-overall hidden">
+                            <span class="stat-label">Overall:</span>
+                            <span class="overall-vpip">-</span>/<span class="overall-pfr">-</span>
+                        </div>
+                    </div>
+                    <div class="empty-seat">Empty</div>
+                    <div class="button-indicator hidden">BTN</div>
+                    <div class="sitting-out-indicator hidden">Sitting Out</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Active Session -->
+    <div class="bg-white rounded-lg shadow-md p-12 text-center">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">No Active Session</h2>
+        <div class="max-w-2xl mx-auto text-left mb-6">
+            <p class="text-gray-600 mb-4">Start a new poker session to begin tracking player statistics.</p>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <h3 class="font-semibold text-blue-900 mb-2">Session Setup:</h3>
+                <ol class="list-decimal list-inside space-y-1 text-gray-700">
+                    <li>Click "Start Session" and select the button position</li>
+                    <li>All 9 seats will be pre-filled with placeholder players</li>
+                    <li>Remove players from empty seats (click seat → Remove Player)</li>
+                    <li>Update player names by clicking seats and using "Name This Player"</li>
+                    <li>Search for known players to load their stats automatically</li>
+                    <li>Start playing hands once your table is set up!</li>
+                </ol>
+            </div>
+        </div>
+        <button id="start-session-btn-main" class="btn btn-primary">Start Session</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Player Management Modal -->
+<div id="player-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <h3 class="text-xl font-bold mb-4" id="modal-title">Manage Player</h3>
+        <div id="modal-content"></div>
+    </div>
+</div>
+
+<!-- Button Position Selector Modal -->
+<div id="button-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <h3 class="text-xl font-bold mb-4">Select Button Position</h3>
+        <p class="text-gray-600 mb-4">Choose which seat has the dealer button to start the session:</p>
+        <div class="grid grid-cols-3 gap-2">
+            {% for i in range(1, 10) %}
+            <button class="btn-position-select btn btn-secondary" data-position="{{ i }}">
+                Seat {{ i }}
+            </button>
+            {% endfor %}
+        </div>
+        <button id="cancel-button-select" class="btn btn-secondary w-full mt-4">Cancel</button>
+    </div>
+</div>
+
+<script>
+    // Initialize with session data
+    const SESSION_DATA = {{ session|tojson|safe if session else 'null' }};
+</script>
+<script src="{{ url_for('static', filename='js/poker.js') }}?v={{ range(1, 10000) | random }}"></script>
+
+{% endblock %}
+

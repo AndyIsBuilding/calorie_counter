@@ -228,6 +228,57 @@ def init_db():
                   user_id INTEGER NOT NULL,
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     
+    # Create poker_players table
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_players
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  player_name TEXT NOT NULL,
+                  player_notes TEXT,
+                  total_hands INTEGER DEFAULT 0,
+                  total_vpip INTEGER DEFAULT 0,
+                  total_pfr INTEGER DEFAULT 0,
+                  last_played TEXT,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
+    
+    # Create poker_sessions table
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_sessions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  session_date TEXT NOT NULL,
+                  is_active INTEGER DEFAULT 1,
+                  button_position INTEGER NOT NULL,
+                  hand_count INTEGER DEFAULT 0,
+                  created_at TEXT NOT NULL,
+                  ended_at TEXT,
+                  FOREIGN KEY (user_id) REFERENCES users(id))''')
+    
+    # Create poker_session_players table (junction table)
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_session_players
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id INTEGER NOT NULL,
+                  player_id INTEGER,
+                  seat_number INTEGER NOT NULL,
+                  session_hands INTEGER DEFAULT 0,
+                  session_vpip INTEGER DEFAULT 0,
+                  session_pfr INTEGER DEFAULT 0,
+                  is_sitting_out INTEGER DEFAULT 0,
+                  player_display_name TEXT NOT NULL,
+                  FOREIGN KEY (session_id) REFERENCES poker_sessions(id),
+                  FOREIGN KEY (player_id) REFERENCES poker_players(id))''')
+    
+    # Create poker_hand_tracking table (temporary hand state)
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_hand_tracking
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id INTEGER NOT NULL,
+                  hand_number INTEGER NOT NULL,
+                  button_position INTEGER NOT NULL,
+                  has_btn_straddle INTEGER DEFAULT 0,
+                  has_utg_straddle INTEGER DEFAULT 0,
+                  actions TEXT,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY (session_id) REFERENCES poker_sessions(id))''')
+    
     conn.commit()
     conn.close()
 
@@ -1360,11 +1411,911 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+# ==================== POKER ROUTES ====================
+
+def next_occupied_seat(current_pos, cursor, session_id):
+    """Find the next occupied, non-sitting-out seat clockwise from current_pos."""
+    cursor.execute("""SELECT seat_number FROM poker_session_players
+                      WHERE session_id = ? AND is_sitting_out = 0
+                      ORDER BY seat_number""", (session_id,))
+    occupied = [row[0] for row in cursor.fetchall()]
+    if not occupied:
+        return (current_pos % 9) + 1
+    # Find the first occupied seat after current_pos (wrapping around)
+    for seat in occupied:
+        if seat > current_pos:
+            return seat
+    return occupied[0]  # Wrap around to lowest seat
+
+
+@app.route('/poker')
+@login_required
+def poker():
+    """Main poker page - load active session or show start session screen"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
     
-    # Redirect to the index page to see the flashed messages
-    return redirect(url_for('index'))
+    # Check for active session
+    c.execute("""SELECT id, button_position, hand_count, created_at 
+                 FROM poker_sessions 
+                 WHERE user_id = ? AND is_active = 1 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (current_user.id,))
+    session = c.fetchone()
+    
+    session_data = None
+    if session:
+        session_id, button_pos, hand_count, created_at = session
+
+        # Get all players in this session
+        c.execute("""SELECT psp.id, psp.seat_number, psp.player_display_name,
+                            psp.session_hands, psp.session_vpip, psp.session_pfr,
+                            psp.is_sitting_out, psp.player_id,
+                            pp.total_hands, pp.total_vpip, pp.total_pfr
+                     FROM poker_session_players psp
+                     LEFT JOIN poker_players pp ON psp.player_id = pp.id
+                     WHERE psp.session_id = ?
+                     ORDER BY psp.seat_number""",
+                  (session_id,))
+        players_raw = c.fetchall()
+        players = []
+        for p in players_raw:
+            players.append({
+                'id': p[0],
+                'seat_number': p[1],
+                'name': p[2],
+                'session_hands': p[3],
+                'session_vpip': p[4],
+                'session_pfr': p[5],
+                'sitting_out': p[6] == 1,
+                'player_id': p[7],
+                'total_hands': p[8],
+                'total_vpip': p[9],
+                'total_pfr': p[10]
+            })
+
+        # Check for active hand
+        c.execute("""SELECT id, hand_number, button_position, has_btn_straddle,
+                            has_utg_straddle, actions
+                     FROM poker_hand_tracking
+                     WHERE session_id = ?
+                     ORDER BY created_at DESC LIMIT 1""",
+                  (session_id,))
+        hand_raw = c.fetchone()
+        active_hand = None
+        if hand_raw:
+            import json as _json
+            actions = _json.loads(hand_raw[5]) if hand_raw[5] else []
+            active_hand = {
+                'id': hand_raw[0],
+                'hand_number': hand_raw[1],
+                'button_position': hand_raw[2],
+                'has_btn_straddle': hand_raw[3] == 1,
+                'has_utg_straddle': hand_raw[4] == 1,
+                'actions': actions
+            }
+
+        session_data = {
+            'session_id': session_id,
+            'button_position': button_pos,
+            'hand_count': hand_count,
+            'created_at': created_at,
+            'players': players,
+            'active_hand': active_hand
+        }
+    
+    conn.close()
+    
+    return render_template('poker.html', session=session_data)
+
+@app.route('/poker/start_session', methods=['POST'])
+@login_required
+def start_poker_session():
+    """Initialize a new poker session"""
+    button_position = request.form.get('button_position', type=int)
+    
+    if not button_position or button_position < 1 or button_position > 9:
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Invalid button position', 'category': 'error'}
+        })
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # End any existing active sessions (safety check)
+    c.execute("""UPDATE poker_sessions SET is_active = 0, ended_at = ? 
+                 WHERE user_id = ? AND is_active = 1""", 
+              (datetime.now().isoformat(), current_user.id))
+    
+    # Create new session
+    now = datetime.now().isoformat()
+    c.execute("""INSERT INTO poker_sessions 
+                 (user_id, session_date, is_active, button_position, hand_count, created_at)
+                 VALUES (?, ?, 1, ?, 0, ?)""", 
+              (current_user.id, get_local_date().isoformat(), button_position, now))
+    session_id = c.lastrowid
+    
+    # Pre-populate all 9 seats with placeholder players
+    # Using generic placeholder names that make it clear they need to be updated
+    placeholder_names = [
+        "Player 1", "Player 2", "Player 3", "Player 4", "Player 5",
+        "Player 6", "Player 7", "Player 8", "Player 9"
+    ]
+    
+    for seat_num in range(1, 10):
+        c.execute("""INSERT INTO poker_session_players 
+                     (session_id, player_id, seat_number, player_display_name, 
+                      session_hands, session_vpip, session_pfr, is_sitting_out)
+                     VALUES (?, NULL, ?, ?, 0, 0, 0, 0)""", 
+                  (session_id, seat_num, placeholder_names[seat_num - 1]))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'toast': {'message': 'Session started! Remove empty seats or update player names.', 'category': 'success'}
+    })
+
+@app.route('/poker/end_session', methods=['POST'])
+@login_required
+def end_poker_session():
+    """End current session and update cumulative stats"""
+    session_id = request.form.get('session_id', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Verify session belongs to user
+    c.execute("SELECT id FROM poker_sessions WHERE id = ? AND user_id = ?", 
+              (session_id, current_user.id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    # Update cumulative stats for all named players in this session
+    c.execute("""SELECT player_id, session_hands, session_vpip, session_pfr
+                 FROM poker_session_players 
+                 WHERE session_id = ? AND player_id IS NOT NULL""", 
+              (session_id,))
+    players = c.fetchall()
+    
+    for player_id, session_hands, session_vpip, session_pfr in players:
+        c.execute("""UPDATE poker_players 
+                     SET total_hands = total_hands + ?,
+                         total_vpip = total_vpip + ?,
+                         total_pfr = total_pfr + ?,
+                         last_played = ?
+                     WHERE id = ?""", 
+                  (session_hands, session_vpip, session_pfr, 
+                   get_local_date().isoformat(), player_id))
+    
+    # Mark session as ended
+    c.execute("""UPDATE poker_sessions 
+                 SET is_active = 0, ended_at = ? 
+                 WHERE id = ?""", 
+              (datetime.now().isoformat(), session_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'toast': {'message': 'Session ended. Stats saved!', 'category': 'success'}
+    })
+
+@app.route('/poker/session_state')
+@login_required
+def poker_session_state():
+    """Get current session state"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get active session
+    c.execute("""SELECT id, button_position, hand_count, created_at 
+                 FROM poker_sessions 
+                 WHERE user_id = ? AND is_active = 1 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (current_user.id,))
+    session = c.fetchone()
+    
+    if not session:
+        conn.close()
+        return jsonify({'success': False, 'message': 'No active session'})
+    
+    session_id, button_pos, hand_count, created_at = session
+    
+    # Get all players
+    c.execute("""SELECT psp.id, psp.seat_number, psp.player_display_name, 
+                        psp.session_hands, psp.session_vpip, psp.session_pfr, 
+                        psp.is_sitting_out, psp.player_id,
+                        pp.total_hands, pp.total_vpip, pp.total_pfr
+                 FROM poker_session_players psp
+                 LEFT JOIN poker_players pp ON psp.player_id = pp.id
+                 WHERE psp.session_id = ?
+                 ORDER BY psp.seat_number""", 
+              (session_id,))
+    players_raw = c.fetchall()
+    
+    players = []
+    for p in players_raw:
+        players.append({
+            'id': p[0],
+            'seat_number': p[1],
+            'name': p[2],
+            'session_hands': p[3],
+            'session_vpip': p[4],
+            'session_pfr': p[5],
+            'sitting_out': p[6] == 1,
+            'player_id': p[7],
+            'total_hands': p[8],
+            'total_vpip': p[9],
+            'total_pfr': p[10]
+        })
+    
+    # Check for active hand
+    c.execute("""SELECT id, hand_number, button_position, has_btn_straddle, 
+                        has_utg_straddle, actions
+                 FROM poker_hand_tracking 
+                 WHERE session_id = ? 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (session_id,))
+    hand_raw = c.fetchone()
+    
+    active_hand = None
+    if hand_raw:
+        import json
+        actions = json.loads(hand_raw[5]) if hand_raw[5] else []
+        active_hand = {
+            'id': hand_raw[0],
+            'hand_number': hand_raw[1],
+            'button_position': hand_raw[2],
+            'has_btn_straddle': hand_raw[3] == 1,
+            'has_utg_straddle': hand_raw[4] == 1,
+            'actions': actions
+        }
+    
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'session': {
+            'id': session_id,
+            'button_position': button_pos,
+            'hand_count': hand_count,
+            'created_at': created_at
+        },
+        'players': players,
+        'active_hand': active_hand
+    })
+
+@app.route('/poker/add_player', methods=['POST'])
+@login_required
+def add_poker_player():
+    """Add player to a seat"""
+    session_id = request.form.get('session_id', type=int)
+    seat_number = request.form.get('seat_number', type=int)
+    player_name = request.form.get('player_name', '').strip()
+    player_id = request.form.get('player_id', type=int)  # Optional: existing player
+    
+    if not session_id or not seat_number or seat_number < 1 or seat_number > 9:
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Invalid request', 'category': 'error'}
+        })
+    
+    if not player_name and not player_id:
+        player_name = f"Player {seat_number}"
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Verify session belongs to user
+    c.execute("SELECT id FROM poker_sessions WHERE id = ? AND user_id = ? AND is_active = 1", 
+              (session_id, current_user.id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    # Check if seat is occupied
+    c.execute("SELECT id FROM poker_session_players WHERE session_id = ? AND seat_number = ?", 
+              (session_id, seat_number))
+    if c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Seat already occupied', 'category': 'error'}
+        })
+    
+    # If player_id provided, get their name
+    if player_id:
+        c.execute("SELECT player_name FROM poker_players WHERE id = ? AND user_id = ?", 
+                  (player_id, current_user.id))
+        result = c.fetchone()
+        if result:
+            player_name = result[0]
+        else:
+            player_id = None
+    
+    # Add player to session
+    c.execute("""INSERT INTO poker_session_players 
+                 (session_id, player_id, seat_number, player_display_name, 
+                  session_hands, session_vpip, session_pfr, is_sitting_out)
+                 VALUES (?, ?, ?, ?, 0, 0, 0, 0)""", 
+              (session_id, player_id, seat_number, player_name))
+    
+    session_player_id = c.lastrowid
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'session_player_id': session_player_id,
+        'toast': {'message': f'{player_name} added to seat {seat_number}', 'category': 'success'}
+    })
+
+@app.route('/poker/remove_player', methods=['POST'])
+@login_required
+def remove_poker_player():
+    """Remove player from seat"""
+    session_id = request.form.get('session_id', type=int)
+    seat_number = request.form.get('seat_number', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Verify session belongs to user
+    c.execute("SELECT id FROM poker_sessions WHERE id = ? AND user_id = ? AND is_active = 1", 
+              (session_id, current_user.id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    # Remove player
+    c.execute("""DELETE FROM poker_session_players 
+                 WHERE session_id = ? AND seat_number = ?""", 
+              (session_id, seat_number))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'toast': {'message': 'Player removed', 'category': 'success'}
+    })
+
+@app.route('/poker/switch_seats', methods=['POST'])
+@login_required
+def switch_poker_seats():
+    """Move player to different seat"""
+    session_id = request.form.get('session_id', type=int)
+    from_seat = request.form.get('from_seat', type=int)
+    to_seat = request.form.get('to_seat', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Verify session
+    c.execute("SELECT id FROM poker_sessions WHERE id = ? AND user_id = ? AND is_active = 1", 
+              (session_id, current_user.id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    # Check destination is empty
+    c.execute("SELECT id FROM poker_session_players WHERE session_id = ? AND seat_number = ?", 
+              (session_id, to_seat))
+    if c.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Destination seat occupied', 'category': 'error'}
+        })
+    
+    # Move player
+    c.execute("""UPDATE poker_session_players 
+                 SET seat_number = ? 
+                 WHERE session_id = ? AND seat_number = ?""", 
+              (to_seat, session_id, from_seat))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'toast': {'message': f'Player moved to seat {to_seat}', 'category': 'success'}
+    })
+
+@app.route('/poker/name_player', methods=['POST'])
+@login_required
+def name_poker_player():
+    """Save player name and notes to database"""
+    session_id = request.form.get('session_id', type=int)
+    seat_number = request.form.get('seat_number', type=int)
+    player_name = request.form.get('player_name', '').strip()
+    player_notes = request.form.get('player_notes', '').strip()
+    
+    if not player_name:
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Player name required', 'category': 'error'}
+        })
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get session player
+    c.execute("""SELECT id, player_id, session_hands, session_vpip, session_pfr
+                 FROM poker_session_players 
+                 WHERE session_id = ? AND seat_number = ?""", 
+              (session_id, seat_number))
+    session_player = c.fetchone()
+    
+    if not session_player:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Player not found', 'category': 'error'}
+        })
+    
+    session_player_id, existing_player_id, session_hands, session_vpip, session_pfr = session_player
+    
+    # Check if player already exists in database with this name
+    c.execute("""SELECT id FROM poker_players 
+                 WHERE user_id = ? AND player_name = ?""", 
+              (current_user.id, player_name))
+    existing = c.fetchone()
+    
+    if existing and existing[0] != existing_player_id:
+        # Different player with same name exists
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'A player with this name already exists', 'category': 'error'}
+        })
+    
+    if existing_player_id:
+        # Update existing player
+        c.execute("""UPDATE poker_players
+                     SET player_name = ?, player_notes = ?
+                     WHERE id = ?""",
+                  (player_name, player_notes, existing_player_id))
+        player_id = existing_player_id
+
+        # Also update display name in session
+        c.execute("""UPDATE poker_session_players
+                     SET player_display_name = ?
+                     WHERE id = ?""",
+                  (player_name, session_player_id))
+    else:
+        # Create new player record
+        now = datetime.now().isoformat()
+        c.execute("""INSERT INTO poker_players 
+                     (user_id, player_name, player_notes, total_hands, 
+                      total_vpip, total_pfr, created_at)
+                     VALUES (?, ?, ?, 0, 0, 0, ?)""", 
+                  (current_user.id, player_name, player_notes, now))
+        player_id = c.lastrowid
+        
+        # Link to session player
+        c.execute("""UPDATE poker_session_players 
+                     SET player_id = ?, player_display_name = ?
+                     WHERE id = ?""", 
+                  (player_id, player_name, session_player_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'player_id': player_id,
+        'toast': {'message': f'Player "{player_name}" saved', 'category': 'success'}
+    })
+
+@app.route('/poker/toggle_sitting_out', methods=['POST'])
+@login_required
+def toggle_sitting_out():
+    """Mark player as sitting out or back in"""
+    session_id = request.form.get('session_id', type=int)
+    seat_number = request.form.get('seat_number', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get current state
+    c.execute("""SELECT is_sitting_out FROM poker_session_players 
+                 WHERE session_id = ? AND seat_number = ?""", 
+              (session_id, seat_number))
+    result = c.fetchone()
+    
+    if not result:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Player not found', 'category': 'error'}
+        })
+    
+    new_state = 0 if result[0] == 1 else 1
+    
+    c.execute("""UPDATE poker_session_players 
+                 SET is_sitting_out = ? 
+                 WHERE session_id = ? AND seat_number = ?""", 
+              (new_state, session_id, seat_number))
+    
+    conn.commit()
+    conn.close()
+    
+    status_text = "sitting out" if new_state == 1 else "back in"
+    
+    return jsonify({
+        'success': True,
+        'is_sitting_out': new_state == 1,
+        'toast': {'message': f'Player marked {status_text}', 'category': 'success'}
+    })
+
+@app.route('/poker/search_players')
+@login_required
+def search_poker_players():
+    """Search existing players for quick add"""
+    query = request.args.get('q', '').strip()
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    c.execute("""SELECT id, player_name, total_hands, total_vpip, total_pfr, last_played
+                 FROM poker_players 
+                 WHERE user_id = ? AND player_name LIKE ?
+                 ORDER BY last_played DESC, player_name
+                 LIMIT 20""", 
+              (current_user.id, f'%{query}%'))
+    
+    players = []
+    for row in c.fetchall():
+        vpip_pct = (row[3] / row[2] * 100) if row[2] > 0 else 0
+        pfr_pct = (row[4] / row[2] * 100) if row[2] > 0 else 0
+        players.append({
+            'id': row[0],
+            'name': row[1],
+            'total_hands': row[2],
+            'vpip': round(vpip_pct, 1),
+            'pfr': round(pfr_pct, 1),
+            'last_played': row[5]
+        })
+    
+    conn.close()
+    
+    return jsonify({'success': True, 'players': players})
+
+@app.route('/poker/start_hand', methods=['POST'])
+@login_required
+def start_poker_hand():
+    """Initialize new hand tracking"""
+    import json
+    
+    session_id = request.form.get('session_id', type=int)
+    has_btn_straddle = request.form.get('has_btn_straddle', type=int, default=0)
+    has_utg_straddle = request.form.get('has_utg_straddle', type=int, default=0)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get session
+    c.execute("""SELECT button_position, hand_count FROM poker_sessions 
+                 WHERE id = ? AND user_id = ? AND is_active = 1""", 
+              (session_id, current_user.id))
+    session = c.fetchone()
+    
+    if not session:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    button_pos, hand_count = session
+    
+    # Count active players (not sitting out)
+    c.execute("""SELECT COUNT(*) FROM poker_session_players 
+                 WHERE session_id = ? AND is_sitting_out = 0""", 
+              (session_id,))
+    active_count = c.fetchone()[0]
+    
+    if active_count < 2:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Need at least 2 active players', 'category': 'error'}
+        })
+    
+    # Delete any existing incomplete hands
+    c.execute("DELETE FROM poker_hand_tracking WHERE session_id = ?", (session_id,))
+    
+    # Create new hand
+    now = datetime.now().isoformat()
+    new_hand_number = hand_count + 1
+    
+    c.execute("""INSERT INTO poker_hand_tracking 
+                 (session_id, hand_number, button_position, has_btn_straddle, 
+                  has_utg_straddle, actions, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""", 
+              (session_id, new_hand_number, button_pos, has_btn_straddle, 
+               has_utg_straddle, json.dumps([]), now))
+    
+    hand_id = c.lastrowid
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'hand_id': hand_id,
+        'hand_number': new_hand_number,
+        'toast': {'message': f'Hand #{new_hand_number} started', 'category': 'success'}
+    })
+
+@app.route('/poker/record_action', methods=['POST'])
+@login_required
+def record_poker_action():
+    """Record player action (fold/call/raise/skip)"""
+    import json
+    
+    session_id = request.form.get('session_id', type=int)
+    seat_number = request.form.get('seat_number', type=int)
+    action = request.form.get('action', '').lower()  # fold, call, raise, skip
+    
+    if action not in ['fold', 'call', 'raise', 'skip', 'check']:
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Invalid action', 'category': 'error'}
+        })
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get active hand
+    c.execute("""SELECT id, actions FROM poker_hand_tracking 
+                 WHERE session_id = ? 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (session_id,))
+    hand = c.fetchone()
+    
+    if not hand:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'No active hand', 'category': 'error'}
+        })
+    
+    hand_id, actions_json = hand
+    actions = json.loads(actions_json) if actions_json else []
+    
+    # Add new action
+    actions.append({
+        'seat': seat_number,
+        'action': action,
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    # Update hand tracking
+    c.execute("""UPDATE poker_hand_tracking 
+                 SET actions = ? 
+                 WHERE id = ?""", 
+              (json.dumps(actions), hand_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'action_count': len(actions)
+    })
+
+@app.route('/poker/complete_hand', methods=['POST'])
+@login_required
+def complete_poker_hand():
+    """Finalize hand and update statistics"""
+    import json
+    
+    session_id = request.form.get('session_id', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get active hand
+    c.execute("""SELECT id, actions, button_position FROM poker_hand_tracking 
+                 WHERE session_id = ? 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (session_id,))
+    hand = c.fetchone()
+    
+    if not hand:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'No active hand', 'category': 'error'}
+        })
+    
+    hand_id, actions_json, button_position = hand
+    actions = json.loads(actions_json) if actions_json else []
+    
+    # Get all active players
+    c.execute("""SELECT seat_number, id FROM poker_session_players 
+                 WHERE session_id = ? AND is_sitting_out = 0""", 
+              (session_id,))
+    active_players = {row[0]: row[1] for row in c.fetchall()}
+    
+    # Calculate VPIP and PFR for each player
+    player_stats = {}
+    for seat in active_players:
+        player_stats[seat] = {'vpip': False, 'pfr': False, 'participated': False}
+    
+    # Check if any raise happened
+    has_raise = any(a['action'] == 'raise' for a in actions)
+    
+    for action in actions:
+        seat = action['seat']
+        action_type = action['action']
+        
+        if seat in player_stats and action_type != 'skip':
+            player_stats[seat]['participated'] = True
+            
+            if action_type in ['call', 'raise']:
+                player_stats[seat]['vpip'] = True
+            
+            if action_type == 'raise':
+                player_stats[seat]['pfr'] = True
+    
+    # Update player statistics for ALL active players (they were all dealt in)
+    for seat, session_player_id in active_players.items():
+        stats = player_stats[seat]
+        vpip_inc = 1 if stats['vpip'] else 0
+        pfr_inc = 1 if stats['pfr'] else 0
+
+        c.execute("""UPDATE poker_session_players
+                     SET session_hands = session_hands + 1,
+                         session_vpip = session_vpip + ?,
+                         session_pfr = session_pfr + ?
+                     WHERE id = ?""",
+                  (vpip_inc, pfr_inc, session_player_id))
+    
+    # Move button position (clockwise, skip empty/sitting-out seats)
+    new_button = next_occupied_seat(button_position, c, session_id)
+
+    # Update session
+    c.execute("""UPDATE poker_sessions
+                 SET button_position = ?, hand_count = hand_count + 1
+                 WHERE id = ?""",
+              (new_button, session_id))
+    
+    # Get updated hand count
+    c.execute("SELECT hand_count FROM poker_sessions WHERE id = ?", (session_id,))
+    hand_count = c.fetchone()[0]
+    
+    # Delete completed hand
+    c.execute("DELETE FROM poker_hand_tracking WHERE id = ?", (hand_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'new_button_position': new_button,
+        'hand_count': hand_count,
+        'toast': {'message': 'Hand completed', 'category': 'success'}
+    })
+
+@app.route('/poker/skip_hand', methods=['POST'])
+@login_required
+def skip_poker_hand():
+    """Skip hand - moves button, no stats recorded"""
+    session_id = request.form.get('session_id', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get current button position
+    c.execute("""SELECT button_position FROM poker_sessions 
+                 WHERE id = ? AND user_id = ? AND is_active = 1""", 
+              (session_id, current_user.id))
+    result = c.fetchone()
+    
+    if not result:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'Session not found', 'category': 'error'}
+        })
+    
+    button_position = result[0]
+    new_button = next_occupied_seat(button_position, c, session_id)
+
+    # Update button position
+    c.execute("""UPDATE poker_sessions
+                 SET button_position = ?
+                 WHERE id = ?""",
+              (new_button, session_id))
+    
+    # Delete any active hand
+    c.execute("DELETE FROM poker_hand_tracking WHERE session_id = ?", (session_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'new_button_position': new_button,
+        'toast': {'message': 'Hand skipped', 'category': 'success'}
+    })
+
+@app.route('/poker/undo_action', methods=['POST'])
+@login_required
+def undo_poker_action():
+    """Undo last action in current hand"""
+    import json
+    
+    session_id = request.form.get('session_id', type=int)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Get active hand
+    c.execute("""SELECT id, actions FROM poker_hand_tracking 
+                 WHERE session_id = ? 
+                 ORDER BY created_at DESC LIMIT 1""", 
+              (session_id,))
+    hand = c.fetchone()
+    
+    if not hand:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'No active hand', 'category': 'error'}
+        })
+    
+    hand_id, actions_json = hand
+    actions = json.loads(actions_json) if actions_json else []
+    
+    if not actions:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'toast': {'message': 'No actions to undo', 'category': 'error'}
+        })
+    
+    # Remove last action
+    undone_action = actions.pop()
+    
+    # Update hand
+    c.execute("""UPDATE poker_hand_tracking 
+                 SET actions = ? 
+                 WHERE id = ?""", 
+              (json.dumps(actions), hand_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'undone_action': undone_action,
+        'toast': {'message': 'Action undone', 'category': 'success'}
+    })
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True)
+    app.run(debug=True, port=5009)
 
