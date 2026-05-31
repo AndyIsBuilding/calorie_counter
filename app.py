@@ -238,6 +238,7 @@ def init_db():
                   total_vpip INTEGER DEFAULT 0,
                   total_pfr INTEGER DEFAULT 0,
                   last_played TEXT,
+                  is_hero INTEGER DEFAULT 0,
                   created_at TEXT NOT NULL,
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     
@@ -264,9 +265,10 @@ def init_db():
                   session_pfr INTEGER DEFAULT 0,
                   is_sitting_out INTEGER DEFAULT 0,
                   player_display_name TEXT NOT NULL,
+                  joined_at TEXT,
                   FOREIGN KEY (session_id) REFERENCES poker_sessions(id),
                   FOREIGN KEY (player_id) REFERENCES poker_players(id))''')
-    
+
     # Create poker_hand_tracking table (temporary hand state)
     c.execute('''CREATE TABLE IF NOT EXISTS poker_hand_tracking
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -278,7 +280,40 @@ def init_db():
                   actions TEXT,
                   created_at TEXT NOT NULL,
                   FOREIGN KEY (session_id) REFERENCES poker_sessions(id))''')
-    
+
+    # Create poker_session_appearances table (permanent per-occupancy history).
+    # One row per stint a player spent in a seat. Captured when a player leaves
+    # a seat or when the session ends, so seat swaps are preserved.
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_session_appearances
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id INTEGER NOT NULL,
+                  seat_number INTEGER NOT NULL,
+                  player_id INTEGER,
+                  player_display_name TEXT NOT NULL,
+                  session_hands INTEGER DEFAULT 0,
+                  session_vpip INTEGER DEFAULT 0,
+                  session_pfr INTEGER DEFAULT 0,
+                  joined_at TEXT,
+                  left_at TEXT,
+                  FOREIGN KEY (session_id) REFERENCES poker_sessions(id),
+                  FOREIGN KEY (player_id) REFERENCES poker_players(id))''')
+
+    # Create poker_hands table (permanent raw hand history).
+    # One row per completed hand. dealt_in and actions are JSON, with each
+    # action attributed to a player_id, so any preflop stat (VPIP, PFR, limp,
+    # 3bet, steal, ...) can be derived now or in the future.
+    c.execute('''CREATE TABLE IF NOT EXISTS poker_hands
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id INTEGER NOT NULL,
+                  hand_number INTEGER,
+                  button_position INTEGER,
+                  has_btn_straddle INTEGER DEFAULT 0,
+                  has_utg_straddle INTEGER DEFAULT 0,
+                  dealt_in TEXT,
+                  actions TEXT,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY (session_id) REFERENCES poker_sessions(id))''')
+
     conn.commit()
     conn.close()
 
@@ -1428,6 +1463,28 @@ def next_occupied_seat(current_pos, cursor, session_id):
     return occupied[0]  # Wrap around to lowest seat
 
 
+def _archive_appearance(c, session_id, seat_number, player_id, display_name,
+                        hands, vpip, pfr, joined_at, left_at, roll_up=True):
+    """Record a completed seat occupancy (a "stint") into the permanent
+    appearances archive, and optionally roll its stats into the player's
+    lifetime totals. Each stint is archived exactly once, so rolling up here
+    keeps lifetime stats correct even when a player leaves mid-session."""
+    c.execute("""INSERT INTO poker_session_appearances
+                 (session_id, seat_number, player_id, player_display_name,
+                  session_hands, session_vpip, session_pfr, joined_at, left_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+              (session_id, seat_number, player_id, display_name,
+               hands, vpip, pfr, joined_at, left_at))
+    if roll_up and player_id is not None:
+        c.execute("""UPDATE poker_players
+                     SET total_hands = total_hands + ?,
+                         total_vpip = total_vpip + ?,
+                         total_pfr = total_pfr + ?,
+                         last_played = ?
+                     WHERE id = ?""",
+                  (hands, vpip, pfr, get_local_date().isoformat(), player_id))
+
+
 @app.route('/poker')
 @login_required
 def poker():
@@ -1451,7 +1508,7 @@ def poker():
         c.execute("""SELECT psp.id, psp.seat_number, psp.player_display_name,
                             psp.session_hands, psp.session_vpip, psp.session_pfr,
                             psp.is_sitting_out, psp.player_id,
-                            pp.total_hands, pp.total_vpip, pp.total_pfr
+                            pp.total_hands, pp.total_vpip, pp.total_pfr, pp.is_hero
                      FROM poker_session_players psp
                      LEFT JOIN poker_players pp ON psp.player_id = pp.id
                      WHERE psp.session_id = ?
@@ -1471,7 +1528,8 @@ def poker():
                 'player_id': p[7],
                 'total_hands': p[8],
                 'total_vpip': p[9],
-                'total_pfr': p[10]
+                'total_pfr': p[10],
+                'is_hero': p[11] == 1
             })
 
         # Check for active hand
@@ -1495,17 +1553,23 @@ def poker():
                 'actions': actions
             }
 
+        # The user's own "hero" player name, if they've designated one before
+        c.execute("""SELECT player_name FROM poker_players
+                     WHERE user_id = ? AND is_hero = 1 LIMIT 1""", (current_user.id,))
+        hero_row = c.fetchone()
+
         session_data = {
             'session_id': session_id,
             'button_position': button_pos,
             'hand_count': hand_count,
             'created_at': created_at,
             'players': players,
-            'active_hand': active_hand
+            'active_hand': active_hand,
+            'hero_name': hero_row[0] if hero_row else ''
         }
-    
+
     conn.close()
-    
+
     return render_template('poker.html', session=session_data)
 
 @app.route('/poker/start_session', methods=['POST'])
@@ -1544,11 +1608,11 @@ def start_poker_session():
     ]
     
     for seat_num in range(1, 10):
-        c.execute("""INSERT INTO poker_session_players 
-                     (session_id, player_id, seat_number, player_display_name, 
-                      session_hands, session_vpip, session_pfr, is_sitting_out)
-                     VALUES (?, NULL, ?, ?, 0, 0, 0, 0)""", 
-                  (session_id, seat_num, placeholder_names[seat_num - 1]))
+        c.execute("""INSERT INTO poker_session_players
+                     (session_id, player_id, seat_number, player_display_name,
+                      session_hands, session_vpip, session_pfr, is_sitting_out, joined_at)
+                     VALUES (?, NULL, ?, ?, 0, 0, 0, 0, ?)""",
+                  (session_id, seat_num, placeholder_names[seat_num - 1], now))
     
     conn.commit()
     conn.close()
@@ -1578,28 +1642,27 @@ def end_poker_session():
             'toast': {'message': 'Session not found', 'category': 'error'}
         })
     
-    # Update cumulative stats for all named players in this session
-    c.execute("""SELECT player_id, session_hands, session_vpip, session_pfr
-                 FROM poker_session_players 
-                 WHERE session_id = ? AND player_id IS NOT NULL""", 
+    # Archive every current occupant who played hands (preserving their stint
+    # in history) and roll their stats into lifetime totals if they're tracked.
+    # Players who already left mid-session were archived + rolled up at that
+    # time, so they're no longer here — no double counting.
+    now = datetime.now().isoformat()
+    c.execute("""SELECT seat_number, player_id, player_display_name,
+                        session_hands, session_vpip, session_pfr, joined_at
+                 FROM poker_session_players
+                 WHERE session_id = ?""",
               (session_id,))
-    players = c.fetchall()
-    
-    for player_id, session_hands, session_vpip, session_pfr in players:
-        c.execute("""UPDATE poker_players 
-                     SET total_hands = total_hands + ?,
-                         total_vpip = total_vpip + ?,
-                         total_pfr = total_pfr + ?,
-                         last_played = ?
-                     WHERE id = ?""", 
-                  (session_hands, session_vpip, session_pfr, 
-                   get_local_date().isoformat(), player_id))
-    
+    for seat_number, player_id, display_name, hands, vpip, pfr, joined_at in c.fetchall():
+        if hands and hands > 0:
+            _archive_appearance(c, session_id, seat_number, player_id,
+                                display_name, hands, vpip, pfr,
+                                joined_at, now, roll_up=True)
+
     # Mark session as ended
-    c.execute("""UPDATE poker_sessions 
-                 SET is_active = 0, ended_at = ? 
-                 WHERE id = ?""", 
-              (datetime.now().isoformat(), session_id))
+    c.execute("""UPDATE poker_sessions
+                 SET is_active = 0, ended_at = ?
+                 WHERE id = ?""",
+              (now, session_id))
     
     conn.commit()
     conn.close()
@@ -1631,17 +1694,17 @@ def poker_session_state():
     session_id, button_pos, hand_count, created_at = session
     
     # Get all players
-    c.execute("""SELECT psp.id, psp.seat_number, psp.player_display_name, 
-                        psp.session_hands, psp.session_vpip, psp.session_pfr, 
+    c.execute("""SELECT psp.id, psp.seat_number, psp.player_display_name,
+                        psp.session_hands, psp.session_vpip, psp.session_pfr,
                         psp.is_sitting_out, psp.player_id,
-                        pp.total_hands, pp.total_vpip, pp.total_pfr
+                        pp.total_hands, pp.total_vpip, pp.total_pfr, pp.is_hero
                  FROM poker_session_players psp
                  LEFT JOIN poker_players pp ON psp.player_id = pp.id
                  WHERE psp.session_id = ?
-                 ORDER BY psp.seat_number""", 
+                 ORDER BY psp.seat_number""",
               (session_id,))
     players_raw = c.fetchall()
-    
+
     players = []
     for p in players_raw:
         players.append({
@@ -1655,7 +1718,8 @@ def poker_session_state():
             'player_id': p[7],
             'total_hands': p[8],
             'total_vpip': p[9],
-            'total_pfr': p[10]
+            'total_pfr': p[10],
+            'is_hero': p[11] == 1
         })
     
     # Check for active hand
@@ -1746,11 +1810,11 @@ def add_poker_player():
             player_id = None
     
     # Add player to session
-    c.execute("""INSERT INTO poker_session_players 
-                 (session_id, player_id, seat_number, player_display_name, 
-                  session_hands, session_vpip, session_pfr, is_sitting_out)
-                 VALUES (?, ?, ?, ?, 0, 0, 0, 0)""", 
-              (session_id, player_id, seat_number, player_name))
+    c.execute("""INSERT INTO poker_session_players
+                 (session_id, player_id, seat_number, player_display_name,
+                  session_hands, session_vpip, session_pfr, is_sitting_out, joined_at)
+                 VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?)""",
+              (session_id, player_id, seat_number, player_name, datetime.now().isoformat()))
     
     session_player_id = c.lastrowid
     
@@ -1783,17 +1847,37 @@ def remove_poker_player():
             'toast': {'message': 'Session not found', 'category': 'error'}
         })
     
-    # Remove player
-    c.execute("""DELETE FROM poker_session_players 
-                 WHERE session_id = ? AND seat_number = ?""", 
+    # Look at the current occupant: if they've played hands this session,
+    # preserve their stint in the appearances archive (and roll up lifetime
+    # stats if they're a tracked player) before clearing the seat.
+    c.execute("""SELECT player_id, player_display_name, session_hands,
+                        session_vpip, session_pfr, joined_at
+                 FROM poker_session_players
+                 WHERE session_id = ? AND seat_number = ?""",
               (session_id, seat_number))
-    
+    occupant = c.fetchone()
+
+    archived = False
+    if occupant:
+        player_id, display_name, hands, vpip, pfr, joined_at = occupant
+        if hands and hands > 0:
+            _archive_appearance(c, session_id, seat_number, player_id,
+                                display_name, hands, vpip, pfr,
+                                joined_at, datetime.now().isoformat(),
+                                roll_up=True)
+            archived = True
+
+    c.execute("""DELETE FROM poker_session_players
+                 WHERE session_id = ? AND seat_number = ?""",
+              (session_id, seat_number))
+
     conn.commit()
     conn.close()
-    
+
+    message = 'Player left — stats saved to history' if archived else 'Player removed'
     return jsonify({
         'success': True,
-        'toast': {'message': 'Player removed', 'category': 'success'}
+        'toast': {'message': message, 'category': 'success'}
     })
 
 @app.route('/poker/switch_seats', methods=['POST'])
@@ -1849,7 +1933,8 @@ def name_poker_player():
     seat_number = request.form.get('seat_number', type=int)
     player_name = request.form.get('player_name', '').strip()
     player_notes = request.form.get('player_notes', '').strip()
-    
+    is_hero = request.form.get('is_hero', type=int, default=0)
+
     if not player_name:
         return jsonify({
             'success': False,
@@ -1881,15 +1966,28 @@ def name_poker_player():
               (current_user.id, player_name))
     existing = c.fetchone()
     
-    if existing and existing[0] != existing_player_id:
-        # Different player with same name exists
+    name_taken = existing and existing[0] != existing_player_id
+
+    if name_taken and not is_hero:
+        # Different player with same name exists (blocked for villains to avoid
+        # accidental duplicates; allowed for the hero so you can re-seat yourself).
         conn.close()
         return jsonify({
             'success': False,
             'toast': {'message': 'A player with this name already exists', 'category': 'error'}
         })
-    
-    if existing_player_id:
+
+    if name_taken and is_hero:
+        # Re-seat your existing identity: link this seat to the existing player.
+        player_id = existing[0]
+        if player_notes:
+            c.execute("UPDATE poker_players SET player_notes = ? WHERE id = ?",
+                      (player_notes, player_id))
+        c.execute("""UPDATE poker_session_players
+                     SET player_id = ?, player_display_name = ?
+                     WHERE id = ?""",
+                  (player_id, player_name, session_player_id))
+    elif existing_player_id:
         # Update existing player
         c.execute("""UPDATE poker_players
                      SET player_name = ?, player_notes = ?
@@ -1913,18 +2011,25 @@ def name_poker_player():
         player_id = c.lastrowid
         
         # Link to session player
-        c.execute("""UPDATE poker_session_players 
+        c.execute("""UPDATE poker_session_players
                      SET player_id = ?, player_display_name = ?
-                     WHERE id = ?""", 
+                     WHERE id = ?""",
                   (player_id, player_name, session_player_id))
-    
+
+    # Hero designation: at most one "this is me" player per user.
+    if is_hero:
+        c.execute("UPDATE poker_players SET is_hero = 0 WHERE user_id = ? AND id != ?",
+                  (current_user.id, player_id))
+        c.execute("UPDATE poker_players SET is_hero = 1 WHERE id = ?", (player_id,))
+
     conn.commit()
     conn.close()
-    
+
+    message = "That's you — saved" if is_hero else f'Player "{player_name}" saved'
     return jsonify({
         'success': True,
         'player_id': player_id,
-        'toast': {'message': f'Player "{player_name}" saved', 'category': 'success'}
+        'toast': {'message': message, 'category': 'success'}
     })
 
 @app.route('/poker/toggle_sitting_out', methods=['POST'])
@@ -2137,27 +2242,33 @@ def complete_poker_hand():
     c = conn.cursor()
     
     # Get active hand
-    c.execute("""SELECT id, actions, button_position FROM poker_hand_tracking 
-                 WHERE session_id = ? 
-                 ORDER BY created_at DESC LIMIT 1""", 
+    c.execute("""SELECT id, actions, button_position, hand_number,
+                        has_btn_straddle, has_utg_straddle
+                 FROM poker_hand_tracking
+                 WHERE session_id = ?
+                 ORDER BY created_at DESC LIMIT 1""",
               (session_id,))
     hand = c.fetchone()
-    
+
     if not hand:
         conn.close()
         return jsonify({
             'success': False,
             'toast': {'message': 'No active hand', 'category': 'error'}
         })
-    
-    hand_id, actions_json, button_position = hand
+
+    hand_id, actions_json, button_position, hand_number, has_btn_straddle, has_utg_straddle = hand
     actions = json.loads(actions_json) if actions_json else []
-    
-    # Get all active players
-    c.execute("""SELECT seat_number, id FROM poker_session_players 
-                 WHERE session_id = ? AND is_sitting_out = 0""", 
+
+    # Get all active players (seat -> session_player_id and seat -> player_id)
+    c.execute("""SELECT seat_number, id, player_id FROM poker_session_players
+                 WHERE session_id = ? AND is_sitting_out = 0""",
               (session_id,))
-    active_players = {row[0]: row[1] for row in c.fetchall()}
+    active_players = {}
+    seat_player_id = {}
+    for seat_n, sp_id, p_id in c.fetchall():
+        active_players[seat_n] = sp_id
+        seat_player_id[seat_n] = p_id
     
     # Calculate VPIP and PFR for each player
     player_stats = {}
@@ -2205,8 +2316,24 @@ def complete_poker_hand():
     # Get updated hand count
     c.execute("SELECT hand_count FROM poker_sessions WHERE id = ?", (session_id,))
     hand_count = c.fetchone()[0]
-    
-    # Delete completed hand
+
+    # Persist the raw hand permanently so any preflop stat can be derived later.
+    # Attribute every dealt-in seat and every action to its player_id.
+    dealt_in = [{'seat': s, 'player_id': seat_player_id.get(s)}
+                for s in sorted(active_players)]
+    enriched_actions = [{'seat': a['seat'],
+                         'player_id': seat_player_id.get(a['seat']),
+                         'action': a['action']}
+                        for a in actions]
+    c.execute("""INSERT INTO poker_hands
+                 (session_id, hand_number, button_position, has_btn_straddle,
+                  has_utg_straddle, dealt_in, actions, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+              (session_id, hand_number, button_position, has_btn_straddle,
+               has_utg_straddle, json.dumps(dealt_in), json.dumps(enriched_actions),
+               datetime.now().isoformat()))
+
+    # Delete the temporary in-progress hand record
     c.execute("DELETE FROM poker_hand_tracking WHERE id = ?", (hand_id,))
     
     conn.commit()
@@ -2314,6 +2441,259 @@ def undo_poker_action():
         'undone_action': undone_action,
         'toast': {'message': 'Action undone', 'category': 'success'}
     })
+
+def _format_duration(start_iso, end_iso):
+    """Return a human duration like '2h 14m' between two ISO timestamps."""
+    if not start_iso or not end_iso:
+        return None
+    try:
+        start = datetime.fromisoformat(start_iso)
+        end = datetime.fromisoformat(end_iso)
+    except (ValueError, TypeError):
+        return None
+    total_minutes = int((end - start).total_seconds() // 60)
+    if total_minutes < 0:
+        return None
+    hours, minutes = divmod(total_minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def _pct(numerator, denominator):
+    return round((numerator / denominator) * 100) if denominator else 0
+
+
+def _compute_preflop_reads(c, player_id, user_id):
+    """Derive preflop read stats for a player from the raw poker_hands archive.
+    Replays each recorded hand the player was dealt into. Because the raw hands
+    are stored permanently, any new stat can be added here without a migration."""
+    import json as _json
+    c.execute("""SELECT h.dealt_in, h.actions
+                 FROM poker_hands h
+                 JOIN poker_sessions ps ON h.session_id = ps.id
+                 WHERE ps.user_id = ?""", (user_id,))
+
+    hands = vpip = pfr = limp = limp_call = limp_rr = 0
+    three_bet = three_bet_opp = 0
+    for dealt_in_json, actions_json in c.fetchall():
+        dealt_in = _json.loads(dealt_in_json) if dealt_in_json else []
+        if not any(d.get('player_id') == player_id for d in dealt_in):
+            continue
+        hands += 1
+
+        acts = _json.loads(actions_json) if actions_json else []
+        raise_count = 0     # number of raises so far this hand (any player)
+        limped = v = p = lc = lr = False
+        tb = tb_opp = False
+        for a in acts:
+            is_me = a.get('player_id') == player_id
+            act = a.get('action')
+            if is_me and act != 'skip':
+                if act in ('call', 'raise'):
+                    v = True
+                # A 3-bet spot = acting while facing exactly one prior raise (the open)
+                if raise_count == 1:
+                    tb_opp = True
+                    if act == 'raise':
+                        tb = True
+                if act == 'raise':
+                    p = True
+                    if limped:
+                        lr = True          # limped, then re-raised
+                elif act == 'call':
+                    if raise_count == 0 and not limped:
+                        limped = True      # first voluntary money in is a call = limp
+                    elif raise_count > 0 and limped:
+                        lc = True          # limped, then called a raise
+            if act == 'raise':
+                raise_count += 1
+        vpip += 1 if v else 0
+        pfr += 1 if p else 0
+        limp += 1 if limped else 0
+        limp_call += 1 if lc else 0
+        limp_rr += 1 if lr else 0
+        three_bet += 1 if tb else 0
+        three_bet_opp += 1 if tb_opp else 0
+
+    return {
+        'hands': hands,
+        'vpip': _pct(vpip, hands),
+        'pfr': _pct(pfr, hands),
+        'limp': _pct(limp, hands),
+        'limp_ct': limp,
+        'limp_call_ct': limp_call,
+        'limp_rr_ct': limp_rr,
+        'limp_call_pct': _pct(limp_call, limp),
+        'limp_rr_pct': _pct(limp_rr, limp),
+        'three_bet_ct': three_bet,
+        'three_bet_opp': three_bet_opp,
+        'three_bet_pct': _pct(three_bet, three_bet_opp),
+    }
+
+
+@app.route('/poker/history')
+@login_required
+def poker_history():
+    """History page: past sessions + tracked-player directory."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Ended sessions, newest first
+    c.execute("""SELECT id, session_date, created_at, ended_at, hand_count
+                 FROM poker_sessions
+                 WHERE user_id = ? AND is_active = 0
+                 ORDER BY created_at DESC""",
+              (current_user.id,))
+    sessions = []
+    for sid, sdate, created_at, ended_at, hand_count in c.fetchall():
+        c.execute("""SELECT COUNT(*) FROM poker_session_appearances
+                     WHERE session_id = ? AND player_id IS NOT NULL""", (sid,))
+        named_count = c.fetchone()[0]
+        sessions.append({
+            'id': sid,
+            'date': sdate,
+            'hand_count': hand_count,
+            'named_count': named_count,
+            'duration': _format_duration(created_at, ended_at)
+        })
+
+    # Tracked players directory
+    c.execute("""SELECT id, player_name, player_notes, total_hands,
+                        total_vpip, total_pfr, last_played, is_hero
+                 FROM poker_players
+                 WHERE user_id = ?
+                 ORDER BY is_hero DESC, last_played DESC, player_name""",
+              (current_user.id,))
+    players = []
+    for row in c.fetchall():
+        players.append({
+            'id': row[0],
+            'name': row[1],
+            'notes': row[2] or '',
+            'total_hands': row[3],
+            'vpip': _pct(row[4], row[3]),
+            'pfr': _pct(row[5], row[3]),
+            'last_played': row[6],
+            'is_hero': row[7] == 1
+        })
+
+    conn.close()
+    return render_template('poker_history.html', sessions=sessions, players=players)
+
+
+@app.route('/poker/session_detail/<int:session_id>')
+@login_required
+def poker_session_detail(session_id):
+    """Per-seat stats for one past session."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""SELECT id, session_date, hand_count FROM poker_sessions
+                 WHERE id = ? AND user_id = ?""", (session_id, current_user.id))
+    session_row = c.fetchone()
+    if not session_row:
+        conn.close()
+        return jsonify({'success': False, 'toast': {'message': 'Session not found', 'category': 'error'}}), 404
+
+    c.execute("""SELECT seat_number, player_display_name, player_id,
+                        session_hands, session_vpip, session_pfr, joined_at, left_at
+                 FROM poker_session_appearances
+                 WHERE session_id = ?
+                 ORDER BY seat_number, id""", (session_id,))
+    players = []
+    for seat, name, player_id, hands, vpip, pfr, joined_at, left_at in c.fetchall():
+        players.append({
+            'seat': seat,
+            'name': name,
+            'player_id': player_id,
+            'is_named': player_id is not None,
+            'hands': hands,
+            'vpip': _pct(vpip, hands),
+            'pfr': _pct(pfr, hands),
+            'duration': _format_duration(joined_at, left_at)
+        })
+
+    conn.close()
+    return jsonify({
+        'success': True,
+        'session': {'id': session_row[0], 'date': session_row[1], 'hand_count': session_row[2]},
+        'players': players
+    })
+
+
+@app.route('/poker/player_detail/<int:player_id>')
+@login_required
+def poker_player_detail(player_id):
+    """Lifetime stats, notes, and session appearances for one player."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""SELECT player_name, player_notes, total_hands,
+                        total_vpip, total_pfr, last_played
+                 FROM poker_players
+                 WHERE id = ? AND user_id = ?""", (player_id, current_user.id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'toast': {'message': 'Player not found', 'category': 'error'}}), 404
+
+    c.execute("""SELECT ps.session_date, a.session_hands, a.session_vpip, a.session_pfr,
+                        a.joined_at, a.left_at
+                 FROM poker_session_appearances a
+                 JOIN poker_sessions ps ON a.session_id = ps.id
+                 WHERE a.player_id = ? AND ps.user_id = ?
+                 ORDER BY ps.created_at DESC""", (player_id, current_user.id))
+    appearances = []
+    for sdate, hands, vpip, pfr, joined_at, left_at in c.fetchall():
+        appearances.append({
+            'date': sdate,
+            'hands': hands,
+            'vpip': _pct(vpip, hands),
+            'pfr': _pct(pfr, hands),
+            'duration': _format_duration(joined_at, left_at)
+        })
+
+    preflop = _compute_preflop_reads(c, player_id, current_user.id)
+
+    conn.close()
+    return jsonify({
+        'success': True,
+        'player': {
+            'id': player_id,
+            'name': row[0],
+            'notes': row[1] or '',
+            'total_hands': row[2],
+            'vpip': _pct(row[3], row[2]),
+            'pfr': _pct(row[4], row[2]),
+            'last_played': row[5]
+        },
+        'appearances': appearances,
+        'preflop': preflop
+    })
+
+
+@app.route('/poker/update_player_notes', methods=['POST'])
+@login_required
+def update_poker_player_notes():
+    """Update notes for a tracked player (by player_id)."""
+    player_id = request.form.get('player_id', type=int)
+    notes = request.form.get('notes', '').strip()
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM poker_players WHERE id = ? AND user_id = ?",
+              (player_id, current_user.id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'toast': {'message': 'Player not found', 'category': 'error'}}), 404
+
+    c.execute("UPDATE poker_players SET player_notes = ? WHERE id = ?", (notes, player_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'toast': {'message': 'Notes saved', 'category': 'success'}})
+
 
 if __name__ == '__main__':
     init_db()

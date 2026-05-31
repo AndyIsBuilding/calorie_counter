@@ -5,7 +5,6 @@ let switchingSeats = false;
 let switchFromSeat = null;
 let activeHandState = null;
 let currentActionSeat = null;
-let actionQueue = [];
 let cachedActivePlayers = []; // Cached for the duration of a hand
 
 // Initialize on page load
@@ -26,12 +25,12 @@ function setupStartSessionHandlers() {
 
 function showButtonSelector() {
     $('#button-modal').removeClass('hidden');
-    
+
     $('.btn-position-select').on('click', function() {
         const position = $(this).data('position');
         startSession(position);
     });
-    
+
     $('#cancel-button-select').on('click', function() {
         $('#button-modal').addClass('hidden');
     });
@@ -43,7 +42,7 @@ function startSession(buttonPosition) {
     })
     .done(function(response) {
         if (response.success) {
-            setTimeout(() => location.reload(), 1000);
+            setTimeout(() => location.reload(), 800);
         }
     })
     .fail(function() {
@@ -58,24 +57,29 @@ function setupEventHandlers() {
             endSession();
         }
     });
-    
-    // Skip hand
-    $('#skip-hand-btn').on('click', function() {
-        skipHand();
-    });
-    
-    // Undo action
-    $('#undo-action-btn').on('click', function() {
-        undoAction();
-    });
-    
-    // Action buttons
-    $('.action-btn').on('click', function() {
-        const action = $(this).data('action');
+
+    // Start a hand (explicit) — locks in straddle settings, enters recording mode
+    $('#start-hand-btn').on('click', startHand);
+
+    // Ready-state "Skip": advance the button without recording a hand (no prompt,
+    // so you can walk the button several seats with repeated taps).
+    $('#skip-hand-setup-btn').on('click', function() { skipHand(false); });
+
+    // Mid-hand "Misdeal": discards the in-progress hand and advances the button.
+    $('#skip-hand-btn').on('click', function() { skipHand(true); });
+
+    // Undo last recorded action
+    $('#undo-action-btn').on('click', undoAction);
+
+    // Action buttons live in the fixed centre panel; they act on the highlighted
+    // seat. Read the live attribute (not .data()) so the Call/Check relabel sticks.
+    $('#center-action').on('click', '.ov-btn', function(e) {
+        e.stopPropagation();
+        const action = $(this).attr('data-action');
         recordAction(currentActionSeat, action);
     });
-    
-    // Seat clicks
+
+    // Seat clicks (player management) — only when not mid-hand
     $('.poker-seat').on('click', function() {
         const seat = $(this).data('seat');
         handleSeatClick(seat);
@@ -95,28 +99,24 @@ function setupEventHandlers() {
 }
 
 function loadSessionState() {
-    // Update button position indicators
     updateButtonPosition(sessionState.button_position);
 
-    // Load players if session data has them
     if (sessionState.players) {
-        sessionState.players.forEach(player => {
-            updateSeatDisplay(player);
-        });
-        // Cache active players from initial data
+        sessionState.players.forEach(player => updateSeatDisplay(player));
         cachedActivePlayers = sessionState.players
             .filter(p => !p.sitting_out)
             .map(p => p.seat_number)
             .sort((a, b) => a - b);
     } else {
-        // Fetch current state
         refreshSessionState();
     }
 
-    // Check if there's an active hand
     if (sessionState.active_hand) {
+        activeHandState = sessionState.active_hand;
+        // Repaint action colours from saved actions
+        repaintActionColors(activeHandState.actions);
         showActing();
-        loadActiveHand(sessionState.active_hand);
+        updateActionQueue();
     } else {
         showStraddle();
         updateActionQueue();
@@ -129,24 +129,19 @@ function refreshSessionState() {
     $.get('/poker/session_state')
     .done(function(response) {
         if (response.success) {
-            // Update session info
             $('#hand-count').text(response.session.hand_count);
+            $('#felt-hand-num').text(response.session.hand_count + 1);
             sessionState.session_id = response.session.id;
             sessionState.button_position = response.session.button_position;
 
-            // Update button position
             updateButtonPosition(response.session.button_position);
 
-            // Update players and cache active list
-            response.players.forEach(player => {
-                updateSeatDisplay(player);
-            });
+            response.players.forEach(player => updateSeatDisplay(player));
             cachedActivePlayers = response.players
                 .filter(p => !p.sitting_out)
                 .map(p => p.seat_number)
                 .sort((a, b) => a - b);
 
-            // Update active hand state
             if (response.active_hand) {
                 activeHandState = response.active_hand;
                 showActing();
@@ -162,21 +157,17 @@ function refreshSessionState() {
     });
 }
 
+// --- Position markers (placed directly on seats) ---
+
 function updateButtonPosition(position) {
-    const $table = $('.poker-table');
-    for (let i = 1; i <= 9; i++) {
-        $table.removeClass('btn-at-' + i);
-    }
+    $('.poker-seat').removeClass('is-btn');
     if (position) {
-        $table.addClass('btn-at-' + position);
+        $(`.poker-seat[data-seat="${position}"]`).addClass('is-btn');
     }
 }
 
 function updateBlindPositions() {
-    const $table = $('.poker-table');
-    for (let i = 1; i <= 9; i++) {
-        $table.removeClass('sb-at-' + i + ' bb-at-' + i + ' str-at-' + i);
-    }
+    $('.poker-seat').removeClass('is-sb is-bb is-str');
 
     if (!sessionState || !cachedActivePlayers || cachedActivePlayers.length < 2) return;
 
@@ -184,10 +175,9 @@ function updateBlindPositions() {
     const sb = getNextActiveSeat(buttonPos, cachedActivePlayers);
     const bb = getNextActiveSeat(sb, cachedActivePlayers);
 
-    if (sb) $table.addClass('sb-at-' + sb);
-    if (bb) $table.addClass('bb-at-' + bb);
+    if (sb) $(`.poker-seat[data-seat="${sb}"]`).addClass('is-sb');
+    if (bb) $(`.poker-seat[data-seat="${bb}"]`).addClass('is-bb');
 
-    // Straddle: use active hand state if mid-hand, otherwise check toggles
     const hasBtnStraddle = activeHandState
         ? activeHandState.has_btn_straddle
         : $('#btn-straddle-toggle').is(':checked');
@@ -196,56 +186,53 @@ function updateBlindPositions() {
         : $('#utg-straddle-toggle').is(':checked');
 
     if (hasBtnStraddle) {
-        $table.addClass('str-at-' + buttonPos);
+        $(`.poker-seat[data-seat="${buttonPos}"]`).addClass('is-str');
     } else if (hasUtgStraddle) {
         const utg = getNextActiveSeat(bb, cachedActivePlayers);
-        if (utg) $table.addClass('str-at-' + utg);
+        if (utg) $(`.poker-seat[data-seat="${utg}"]`).addClass('is-str');
     }
 }
 
 function updateSeatDisplay(player) {
     const seat = player.seat_number;
     const $seat = $(`.poker-seat[data-seat="${seat}"]`);
-    
-    // Show player info
+
     $seat.find('.empty-seat').addClass('hidden');
     $seat.find('.player-info').removeClass('hidden');
-    
-    // Set player name
+
     const playerName = player.name || `Player ${seat}`;
     $seat.find('.player-name').text(playerName);
-    
-    // Mark placeholder players visually
+
+    // Track the persistent player_id (if named) so we can load notes later
+    $seat.attr('data-player-id', player.player_id || '');
+
     if (playerName.startsWith('Player ')) {
         $seat.addClass('placeholder-player');
     } else {
         $seat.removeClass('placeholder-player');
     }
-    
-    // Calculate and display session stats
-    const sessionVpip = player.session_hands > 0 
-        ? Math.round((player.session_vpip / player.session_hands) * 100) 
+
+    const sessionVpip = player.session_hands > 0
+        ? Math.round((player.session_vpip / player.session_hands) * 100)
         : 0;
-    const sessionPfr = player.session_hands > 0 
-        ? Math.round((player.session_pfr / player.session_hands) * 100) 
+    const sessionPfr = player.session_hands > 0
+        ? Math.round((player.session_pfr / player.session_hands) * 100)
         : 0;
-    
+
     $seat.find('.session-vpip').text(sessionVpip + '%');
     $seat.find('.session-pfr').text(sessionPfr + '%');
-    
-    // Show overall stats if player is named
+
     if (player.total_hands && player.total_hands > 0) {
         const overallVpip = Math.round((player.total_vpip / player.total_hands) * 100);
         const overallPfr = Math.round((player.total_pfr / player.total_hands) * 100);
-        
+
         $seat.find('.overall-vpip').text(overallVpip + '%');
         $seat.find('.overall-pfr').text(overallPfr + '%');
         $seat.find('.player-overall').removeClass('hidden');
     } else {
         $seat.find('.player-overall').addClass('hidden');
     }
-    
-    // Show/hide sitting out indicator
+
     if (player.sitting_out) {
         $seat.find('.sitting-out-indicator').removeClass('hidden');
         $seat.addClass('sitting-out');
@@ -253,30 +240,39 @@ function updateSeatDisplay(player) {
         $seat.find('.sitting-out-indicator').addClass('hidden');
         $seat.removeClass('sitting-out');
     }
+
+    // Hero ("this is me") marker
+    if (player.is_hero) {
+        $seat.addClass('is-hero');
+    } else {
+        $seat.removeClass('is-hero');
+    }
 }
 
 function clearSeatDisplay(seat) {
     const $seat = $(`.poker-seat[data-seat="${seat}"]`);
-    
     $seat.find('.empty-seat').removeClass('hidden');
     $seat.find('.player-info').addClass('hidden');
     $seat.find('.sitting-out-indicator').addClass('hidden');
-    $seat.removeClass('sitting-out placeholder-player');
+    $seat.removeClass('sitting-out placeholder-player is-sb is-bb is-str is-hero');
+    $seat.attr('data-player-id', '');
 }
 
 function handleSeatClick(seat) {
+    // During an active hand, seat taps are reserved for the action overlay.
+    if (activeHandState) return;
+
     const $seat = $(`.poker-seat[data-seat="${seat}"]`);
     const isEmpty = $seat.find('.empty-seat').is(':visible');
-    
+
     if (switchingSeats) {
-        // Complete seat switch
         if (isEmpty && seat !== switchFromSeat) {
             switchSeats(switchFromSeat, seat);
         }
         cancelSeatSwitch();
         return;
     }
-    
+
     if (isEmpty) {
         showAddPlayerModal(seat);
     } else {
@@ -291,9 +287,7 @@ function showAddPlayerModal(seat) {
                 <label class="block text-sm font-medium text-gray-700 mb-2">Player Name</label>
                 <input type="text" id="new-player-name" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Enter name (optional)">
             </div>
-            <div class="text-sm text-gray-600">
-                Or select an existing player:
-            </div>
+            <div class="text-sm text-gray-600">Or select an existing player:</div>
             <div>
                 <input type="text" id="search-players" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Search players...">
                 <div id="player-search-results" class="mt-2 max-h-40 overflow-y-auto"></div>
@@ -304,18 +298,17 @@ function showAddPlayerModal(seat) {
             </div>
         </div>
     `;
-    
+
     $('#modal-content').html(modalContent);
     $('#player-modal').removeClass('hidden');
-    
+
     $('#add-player-btn').on('click', function() {
         const name = $('#new-player-name').val().trim();
         addPlayer(seat, name);
     });
-    
+
     $('#close-modal-btn').on('click', closeModal);
-    
-    // Player search
+
     $('#search-players').on('input', debounce(function() {
         const query = $('#search-players').val().trim();
         if (query.length > 0) {
@@ -330,42 +323,41 @@ function showPlayerManagementModal(seat) {
     const $seat = $(`.poker-seat[data-seat="${seat}"]`);
     const playerName = $seat.find('.player-name').text();
     const isPlaceholder = playerName.startsWith('Player ');
-    
-    let modalContent = `
+
+    const nameLabel = isPlaceholder ? 'Name this player' : 'Name / Update notes';
+    const isHero = $seat.hasClass('is-hero');
+    const heroLabel = isHero ? 'This is my seat ✓' : 'This is me';
+
+    const modalContent = `
         <div class="space-y-3">
-    `;
-    
-    // If it's a placeholder, emphasize replacing with known player
-    if (isPlaceholder) {
-        modalContent += `
-            <button class="btn btn-primary w-full" data-action="search">Replace with Known Player</button>
-            <div class="border-t border-gray-200 my-2"></div>
-        `;
-    }
-    
-    modalContent += `
-            <button class="btn btn-secondary w-full" data-action="name">Name/Update Player</button>
+            <button class="btn ${isHero ? 'btn-secondary' : 'btn-primary'} w-full" data-action="hero">${heroLabel}</button>
+            <button class="btn btn-secondary w-full" data-action="name">${nameLabel}</button>
+            <button class="btn btn-success w-full" data-action="swap">Swap in new player</button>
             <button class="btn btn-secondary w-full" data-action="switch">Switch Seats</button>
             <button class="btn btn-secondary w-full" data-action="sitting-out">Toggle Sitting Out</button>
-            <button class="btn btn-error w-full" data-action="remove">Remove Player</button>
+            <button class="btn btn-error w-full" data-action="remove">Player left / Remove</button>
             <button class="btn btn-secondary w-full" data-action="cancel">Cancel</button>
         </div>
     `;
-    
+
     $('#modal-content').html(modalContent);
     $('#player-modal').removeClass('hidden');
-    
+
     $('#modal-content button').on('click', function() {
         const action = $(this).data('action');
-        
+
         switch(action) {
-            case 'search':
+            case 'hero':
                 closeModal();
-                showSearchReplaceModal(seat);
+                showNamePlayerModal(seat, true);
                 break;
             case 'name':
                 closeModal();
                 showNamePlayerModal(seat);
+                break;
+            case 'swap':
+                closeModal();
+                swapPlayer(seat);
                 break;
             case 'switch':
                 closeModal();
@@ -386,127 +378,82 @@ function showPlayerManagementModal(seat) {
     });
 }
 
-function showSearchReplaceModal(seat) {
-    const modalContent = `
-        <div class="space-y-4">
-            <p class="text-sm text-gray-600">Search for a player you've played with before to load their statistics:</p>
-            <div>
-                <input type="text" id="search-replace-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Search player name...">
-            </div>
-            <div id="search-replace-results" class="max-h-60 overflow-y-auto"></div>
-            <button id="close-modal-btn" class="btn btn-secondary w-full">Cancel</button>
-        </div>
-    `;
-    
-    $('#modal-content').html(modalContent);
-    $('#player-modal').removeClass('hidden');
-    
-    $('#close-modal-btn').on('click', closeModal);
-    
-    // Focus the search input
-    $('#search-replace-input').focus();
-    
-    // Player search with replace functionality
-    $('#search-replace-input').on('input', debounce(function() {
-        const query = $('#search-replace-input').val().trim();
-        if (query.length > 0) {
-            searchPlayersForReplace(query, seat);
-        } else {
-            $('#search-replace-results').html('<p class="text-sm text-gray-500 p-2">Start typing to search...</p>');
-        }
-    }, 300));
-}
-
-function searchPlayersForReplace(query, targetSeat) {
-    $.get('/poker/search_players', { q: query })
-    .done(function(response) {
-        if (response.success) {
-            const results = response.players;
-            let html = '';
-            
-            if (results.length === 0) {
-                html = '<p class="text-sm text-gray-500 p-2">No players found</p>';
-            } else {
-                results.forEach(player => {
-                    html += `
-                        <div class="p-3 hover:bg-gray-100 cursor-pointer border-b player-replace-item" data-player-id="${player.id}" data-player-name="${player.name}">
-                            <div class="font-medium">${player.name}</div>
-                            <div class="text-xs text-gray-600">
-                                VPIP: ${player.vpip}% | PFR: ${player.pfr}% | 
-                                Hands: ${player.total_hands} | 
-                                Last: ${player.last_played || 'N/A'}
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-            
-            $('#search-replace-results').html(html);
-            
-            $('.player-replace-item').on('click', function() {
-                const playerId = $(this).data('player-id');
-                const playerName = $(this).data('player-name');
-                replacePlayerWithKnown(targetSeat, playerId, playerName);
-            });
-        }
-    });
-}
-
-function replacePlayerWithKnown(seat, playerId, playerName) {
-    // First remove the current placeholder
+// Archive the current occupant (server preserves their stint if they played),
+// then immediately open the add-player flow for the now-empty seat.
+function swapPlayer(seat) {
     $.post('/poker/remove_player', {
         session_id: sessionState.session_id,
         seat_number: seat
     })
-    .done(function(removeResponse) {
-        if (removeResponse.success) {
-            // Then add the known player
-            $.post('/poker/add_player', {
-                session_id: sessionState.session_id,
-                seat_number: seat,
-                player_name: playerName,
-                player_id: playerId
-            })
-            .done(function(addResponse) {
-                if (addResponse.success) {
-                    refreshSessionState();
-                    closeModal();
-                }
-            });
+    .done(function(response) {
+        if (response.success) {
+            clearSeatDisplay(seat);
+            refreshSessionState();
+            showAddPlayerModal(seat);
         }
     });
 }
 
-function showNamePlayerModal(seat) {
+function showNamePlayerModal(seat, hero = false) {
     const $seat = $(`.poker-seat[data-seat="${seat}"]`);
     const currentName = $seat.find('.player-name').text();
-    
+    const isPlaceholder = currentName.startsWith('Player ');
+
+    // In hero mode, default the name to the saved hero name (so repeat sessions
+    // are one tap) unless this seat already has a real name.
+    let defaultName = currentName;
+    if (hero && isPlaceholder && sessionState.hero_name) {
+        defaultName = sessionState.hero_name;
+    }
+
+    const title = hero ? 'This is you' : 'Player';
+    const nameLabel = hero ? 'Your name *' : 'Player Name *';
+
     const modalContent = `
         <div class="space-y-4">
+            ${hero ? '<p class="text-sm text-gray-600">Marking this seat as you. Your stats will be tracked like any player.</p>' : ''}
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Player Name *</label>
-                <input type="text" id="player-name-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="${currentName}">
+                <label class="block text-sm font-medium text-gray-700 mb-2">${nameLabel}</label>
+                <input type="text" id="player-name-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="${defaultName}">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
                 <textarea id="player-notes-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="Player tendencies, observations..."></textarea>
             </div>
             <div class="flex gap-2">
-                <button id="save-player-btn" class="btn btn-primary flex-1">Save</button>
+                <button id="save-player-btn" class="btn btn-primary flex-1">${hero ? "That's me" : 'Save'}</button>
                 <button id="close-modal-btn" class="btn btn-secondary flex-1">Cancel</button>
             </div>
         </div>
     `;
-    
+
     $('#modal-content').html(modalContent);
     $('#player-modal').removeClass('hidden');
-    
+
+    // If this seat is a tracked player, load their saved notes so they're
+    // viewable/editable right here mid-session.
+    const playerId = $seat.attr('data-player-id');
+    if (playerId) {
+        $('#player-notes-input').attr('placeholder', 'Loading notes…');
+        $.get('/poker/player_detail/' + playerId)
+            .done(function(resp) {
+                if (resp.success) {
+                    $('#player-notes-input').val(resp.player.notes).attr('placeholder', 'Player tendencies, observations...');
+                } else {
+                    $('#player-notes-input').attr('placeholder', 'Player tendencies, observations...');
+                }
+            })
+            .fail(function() {
+                $('#player-notes-input').attr('placeholder', 'Player tendencies, observations...');
+            });
+    }
+
     $('#save-player-btn').on('click', function() {
         const name = $('#player-name-input').val().trim();
         const notes = $('#player-notes-input').val().trim();
-        namePlayer(seat, name, notes);
+        namePlayer(seat, name, notes, hero);
     });
-    
+
     $('#close-modal-btn').on('click', closeModal);
 }
 
@@ -520,11 +467,11 @@ function addPlayer(seat, name, playerId = null) {
         seat_number: seat,
         player_name: name
     };
-    
+
     if (playerId) {
         data.player_id = playerId;
     }
-    
+
     $.post('/poker/add_player', data)
     .done(function(response) {
         if (response.success) {
@@ -535,8 +482,8 @@ function addPlayer(seat, name, playerId = null) {
 }
 
 function removePlayer(seat) {
-    if (!confirm('Remove this player from the session?')) return;
-    
+    if (!confirm('Remove this player from the seat? If they have played hands this session, their stats are saved to history first.')) return;
+
     $.post('/poker/remove_player', {
         session_id: sessionState.session_id,
         seat_number: seat
@@ -544,24 +491,27 @@ function removePlayer(seat) {
     .done(function(response) {
         if (response.success) {
             clearSeatDisplay(seat);
+            refreshSessionState();
         }
     });
 }
 
-function namePlayer(seat, name, notes) {
+function namePlayer(seat, name, notes, hero = false) {
     if (!name) {
         showToast('Player name is required', 'error');
         return;
     }
-    
+
     $.post('/poker/name_player', {
         session_id: sessionState.session_id,
         seat_number: seat,
         player_name: name,
-        player_notes: notes
+        player_notes: notes,
+        is_hero: hero ? 1 : 0
     })
     .done(function(response) {
         if (response.success) {
+            if (hero) sessionState.hero_name = name;
             refreshSessionState();
             closeModal();
         }
@@ -571,10 +521,10 @@ function namePlayer(seat, name, notes) {
 function initiateSeatSwitch(fromSeat) {
     switchingSeats = true;
     switchFromSeat = fromSeat;
-    
+
     $(`.poker-seat[data-seat="${fromSeat}"]`).addClass('switching-from');
     $('.poker-seat').addClass('switch-mode');
-    
+
     showToast('Click destination seat or click again to cancel', 'info');
 }
 
@@ -616,7 +566,7 @@ function searchPlayers(query, targetSeat) {
         if (response.success) {
             const results = response.players;
             let html = '';
-            
+
             if (results.length === 0) {
                 html = '<p class="text-sm text-gray-500 p-2">No players found</p>';
             } else {
@@ -625,17 +575,17 @@ function searchPlayers(query, targetSeat) {
                         <div class="p-2 hover:bg-gray-100 cursor-pointer border-b player-search-item" data-player-id="${player.id}">
                             <div class="font-medium">${player.name}</div>
                             <div class="text-xs text-gray-600">
-                                VPIP: ${player.vpip}% | PFR: ${player.pfr}% | 
-                                Hands: ${player.total_hands} | 
+                                VPIP: ${player.vpip}% | PFR: ${player.pfr}% |
+                                Hands: ${player.total_hands} |
                                 Last: ${player.last_played || 'N/A'}
                             </div>
                         </div>
                     `;
                 });
             }
-            
+
             $('#player-search-results').html(html);
-            
+
             $('.player-search-item').on('click', function() {
                 const playerId = $(this).data('player-id');
                 const playerName = $(this).find('.font-medium').text();
@@ -645,53 +595,42 @@ function searchPlayers(query, targetSeat) {
     });
 }
 
+// --- Hand recording flow ---
+
+function startHand() {
+    if (!cachedActivePlayers || cachedActivePlayers.length < 2) {
+        showToast('Need at least 2 active players', 'error');
+        return;
+    }
+
+    const btnStraddle = $('#btn-straddle-toggle').is(':checked') ? 1 : 0;
+    const utgStraddle = $('#utg-straddle-toggle').is(':checked') ? 1 : 0;
+
+    $.post('/poker/start_hand', {
+        session_id: sessionState.session_id,
+        has_btn_straddle: btnStraddle,
+        has_utg_straddle: utgStraddle
+    })
+    .done(function(response) {
+        if (response.success) {
+            $('.poker-seat').removeClass('action-fold action-raise action-call');
+            activeHandState = {
+                hand_number: response.hand_number,
+                has_btn_straddle: btnStraddle === 1,
+                has_utg_straddle: utgStraddle === 1,
+                actions: []
+            };
+            showActing();
+            updateActionQueue();
+        }
+    });
+}
+
 function recordAction(seat, action) {
-    if (!seat) {
-        showToast('No player to act', 'error');
+    if (!seat || !activeHandState) {
+        showToast('Start a hand first', 'error');
         return;
     }
-
-    if (!activeHandState) {
-        // No active hand — start one first using current straddle settings
-        const btnStraddle = $('#btn-straddle-toggle').is(':checked') ? 1 : 0;
-        const utgStraddle = $('#utg-straddle-toggle').is(':checked') ? 1 : 0;
-
-        $.get('/poker/session_state')
-        .done(function(stateResponse) {
-            if (!stateResponse.success) return;
-
-            cachedActivePlayers = stateResponse.players
-                .filter(p => !p.sitting_out)
-                .map(p => p.seat_number)
-                .sort((a, b) => a - b);
-
-            if (cachedActivePlayers.length < 2) {
-                showToast('Need at least 2 active players', 'error');
-                return;
-            }
-
-            $.post('/poker/start_hand', {
-                session_id: sessionState.session_id,
-                has_btn_straddle: btnStraddle,
-                has_utg_straddle: utgStraddle
-            })
-            .done(function(response) {
-                if (response.success) {
-                    $('.poker-seat').removeClass('action-fold action-raise action-call');
-                    activeHandState = {
-                        hand_number: response.hand_number,
-                        has_btn_straddle: btnStraddle === 1,
-                        has_utg_straddle: utgStraddle === 1,
-                        actions: []
-                    };
-                    showActing();
-                    doRecordAction(seat, action);
-                }
-            });
-        });
-        return;
-    }
-
     doRecordAction(seat, action);
 }
 
@@ -703,13 +642,7 @@ function doRecordAction(seat, action) {
     })
     .done(function(response) {
         if (response.success) {
-            // Apply action color to the seat
-            const $seat = $(`.poker-seat[data-seat="${seat}"]`);
-            $seat.removeClass('action-fold action-raise action-call active-action');
-            if (action === 'fold') $seat.addClass('action-fold');
-            else if (action === 'raise') $seat.addClass('action-raise');
-            else if (action === 'call' || action === 'check') $seat.addClass('action-call');
-
+            paintSeatAction(seat, action);
             activeHandState.actions.push({ seat: seat, action: action });
             updateActionQueue();
         }
@@ -723,31 +656,36 @@ function completeHand() {
     .done(function(response) {
         if (response.success) {
             $('.poker-seat').removeClass('action-fold action-raise action-call');
+            hideAllOverlays();
             $('#hand-count').text(response.hand_count);
+            $('#felt-hand-num').text(response.hand_count + 1);
             updateButtonPosition(response.new_button_position);
             sessionState.button_position = response.new_button_position;
             activeHandState = null;
             showStraddle();
 
-            // Reset straddle toggles
             $('#btn-straddle-toggle, #utg-straddle-toggle').prop('checked', false);
 
-            // Refresh to get updated stats and highlight next first-to-act
             refreshSessionState();
         }
     });
 }
 
-function skipHand() {
-    if (!confirm('Skip this hand? Button will move but no stats will be recorded.')) return;
-    
+function skipHand(confirmFirst = true) {
+    // Mid-hand "Misdeal" confirms (it discards a hand you've been recording);
+    // the ready-state "Skip" just advances the button, so it skips the prompt.
+    if (confirmFirst && !confirm('Discard this hand? The button moves but no stats are recorded.')) return;
+
     $.post('/poker/skip_hand', {
         session_id: sessionState.session_id
     })
     .done(function(response) {
         if (response.success) {
+            $('.poker-seat').removeClass('action-fold action-raise action-call');
+            hideAllOverlays();
             updateButtonPosition(response.new_button_position);
             sessionState.button_position = response.new_button_position;
+            $('#felt-hand-num').text(parseInt($('#hand-count').text() || '0', 10) + 1);
             activeHandState = null;
             showStraddle();
             updateBlindPositions();
@@ -763,16 +701,8 @@ function undoAction() {
     .done(function(response) {
         if (response.success) {
             if (activeHandState && activeHandState.actions.length > 0) {
-                const undone = activeHandState.actions.pop();
-                // Recalculate action colors from scratch
-                $('.poker-seat').removeClass('action-fold action-raise action-call');
-                activeHandState.actions.forEach(a => {
-                    const $s = $(`.poker-seat[data-seat="${a.seat}"]`);
-                    $s.removeClass('action-fold action-raise action-call');
-                    if (a.action === 'fold') $s.addClass('action-fold');
-                    else if (a.action === 'raise') $s.addClass('action-raise');
-                    else if (a.action === 'call' || a.action === 'check') $s.addClass('action-call');
-                });
+                activeHandState.actions.pop();
+                repaintActionColors(activeHandState.actions);
             }
             updateActionQueue();
         }
@@ -785,28 +715,62 @@ function endSession() {
     })
     .done(function(response) {
         if (response.success) {
-            setTimeout(() => location.reload(), 1500);
+            setTimeout(() => location.reload(), 1200);
         }
     });
 }
 
+// --- Mode + overlay helpers ---
+
 function showStraddle() {
-    $('#straddle-options').removeClass('hidden');
-    $('#acting-indicator').addClass('hidden');
+    $('#hand-setup').removeClass('hidden');
+    $('#hand-active').addClass('hidden');
+    $('.felt-center').removeClass('hidden');
+    hideAllOverlays();
 }
 
 function showActing() {
-    $('#straddle-options').addClass('hidden');
-    $('#acting-indicator').removeClass('hidden');
+    $('#hand-setup').addClass('hidden');
+    $('#hand-active').removeClass('hidden');
+    $('.felt-center').addClass('hidden');
+    $('#center-action').removeClass('hidden');
+    if (activeHandState) $('#active-hand-num').text(activeHandState.hand_number);
 }
 
-function loadActiveHand(hand) {
-    activeHandState = hand;
-    updateActionQueue();
+// Hide the fixed centre action panel (and restore the hand-number display).
+function hideAllOverlays() {
+    $('#center-action').addClass('hidden');
 }
+
+// Point the fixed centre panel at the current player and set the Call/Check label.
+function updateCenterAction(seat, isCheck) {
+    $('#ca-player').text(seatLabel(seat));
+    const $call = $('#center-action [data-action="call"], #center-action [data-action="check"]');
+    if (isCheck) {
+        $call.text('Check').attr('data-action', 'check');
+    } else {
+        $call.text('Call').attr('data-action', 'call');
+    }
+    $('#center-action').removeClass('hidden');
+}
+
+function paintSeatAction(seat, action) {
+    const $seat = $(`.poker-seat[data-seat="${seat}"]`);
+    $seat.removeClass('action-fold action-raise action-call active-action');
+    if (action === 'fold') $seat.addClass('action-fold');
+    else if (action === 'raise') $seat.addClass('action-raise');
+    else if (action === 'call' || action === 'check') $seat.addClass('action-call');
+    // 'skip' leaves the seat unmarked
+}
+
+function repaintActionColors(actions) {
+    $('.poker-seat').removeClass('action-fold action-raise action-call');
+    actions.forEach(a => paintSeatAction(a.seat, a.action));
+}
+
+// --- Action-order engine (unchanged logic) ---
 
 function getNextActiveSeat(currentSeat, activePlayers) {
-    // Find the next active seat clockwise from currentSeat (not including currentSeat)
     for (let i = 1; i <= 9; i++) {
         const candidate = ((currentSeat - 1 + i) % 9) + 1;
         if (activePlayers.includes(candidate)) {
@@ -817,10 +781,6 @@ function getNextActiveSeat(currentSeat, activePlayers) {
 }
 
 function getLastOptionSeat(buttonPos, activePlayers, hasBtnStraddle, hasUtgStraddle) {
-    // Returns the seat that gets to check if no raise has occurred.
-    // In a normal hand: BB is last to act with the option.
-    // With BTN straddle: the button is last to act with the option.
-    // With UTG straddle: UTG is last to act with the option.
     const sb = getNextActiveSeat(buttonPos, activePlayers);
     const bb = getNextActiveSeat(sb, activePlayers);
     if (hasBtnStraddle) {
@@ -833,28 +793,20 @@ function getLastOptionSeat(buttonPos, activePlayers, hasBtnStraddle, hasUtgStrad
 }
 
 function buildActionOrder(buttonPos, activePlayers, hasBtnStraddle, hasUtgStraddle) {
-    // Determine first to act preflop:
-    // No straddle: UTG = button + 3 (skip SB +1, BB +2)
-    // UTG straddle: UTG+1 = button + 4 (skip SB, BB, UTG straddle)
-    // BTN straddle: SB = button + 1
     let firstSeat;
     if (hasBtnStraddle) {
-        // SB acts first (seat after button)
         firstSeat = getNextActiveSeat(buttonPos, activePlayers);
     } else if (hasUtgStraddle) {
-        // First player after UTG (button+3 is UTG, so skip to button+4 equivalent)
         const sb = getNextActiveSeat(buttonPos, activePlayers);
         const bb = getNextActiveSeat(sb, activePlayers);
         const utg = getNextActiveSeat(bb, activePlayers);
         firstSeat = getNextActiveSeat(utg, activePlayers);
     } else {
-        // UTG = first player after BB (button -> SB -> BB -> UTG)
         const sb = getNextActiveSeat(buttonPos, activePlayers);
         const bb = getNextActiveSeat(sb, activePlayers);
         firstSeat = getNextActiveSeat(bb, activePlayers);
     }
 
-    // Build full action order starting from firstSeat
     const order = [firstSeat];
     let seat = firstSeat;
     for (let i = 0; i < activePlayers.length - 1; i++) {
@@ -864,12 +816,20 @@ function buildActionOrder(buttonPos, activePlayers, hasBtnStraddle, hasUtgStradd
     return order;
 }
 
+function seatLabel(seat) {
+    const name = $(`.poker-seat[data-seat="${seat}"] .player-name`).text() || `Player ${seat}`;
+    return `Seat ${seat} (${name})`;
+}
+
 function updateActionQueue() {
+    // Pre-hand: preview who acts first, no overlay yet
     if (!activeHandState) {
-        // Pre-hand: highlight the first player who will act so the user knows who to record
+        hideAllOverlays();
         if (!sessionState || !cachedActivePlayers || cachedActivePlayers.length < 2) {
             currentActionSeat = null;
             $('.poker-seat').removeClass('active-action');
+            $('#first-to-act').text('-');
+            $('#felt-status').text('Add at least 2 players');
             return;
         }
         const btnStraddle = $('#btn-straddle-toggle').is(':checked');
@@ -879,7 +839,9 @@ function updateActionQueue() {
         $('.poker-seat').removeClass('active-action');
         if (currentActionSeat) {
             $(`.poker-seat[data-seat="${currentActionSeat}"]`).addClass('active-action');
+            $('#first-to-act').text(seatLabel(currentActionSeat));
         }
+        $('#felt-status').text('Ready — press Start Hand');
         return;
     }
 
@@ -898,11 +860,8 @@ function updateActionQueue() {
 
     const actions = activeHandState.actions;
 
-    // Determine who still needs to act.
-    // Players who folded are out. Action continues until everyone remaining
-    // has called the last raise (or there was no raise and everyone has acted).
     const foldedSeats = new Set();
-    let lastRaiseIndex = -1; // Index in actions[] of the most recent raise
+    let lastRaiseIndex = -1;
     const skippedSeats = new Set();
 
     for (let i = 0; i < actions.length; i++) {
@@ -912,24 +871,19 @@ function updateActionQueue() {
         if (a.action === 'skip') skippedSeats.add(a.seat);
     }
 
-    // Remaining players = active minus folded minus skipped
     const remaining = actionOrder.filter(s => !foldedSeats.has(s) && !skippedSeats.has(s));
 
     if (remaining.length <= 1) {
-        // Everyone folded except one — auto-complete
         $('.poker-seat').removeClass('active-action');
+        hideAllOverlays();
         currentActionSeat = null;
         completeHand();
         return;
     }
 
-    // Find who needs to act next.
-    // If there was a raise, everyone after it (in action order) who hasn't folded/called must act.
-    // If no raise, each player acts once.
     let nextSeat = null;
 
     if (lastRaiseIndex === -1) {
-        // No raise yet — find first remaining player who hasn't acted at all
         const actedSeats = new Set(actions.map(a => a.seat));
         for (const seat of actionOrder) {
             if (!foldedSeats.has(seat) && !skippedSeats.has(seat) && !actedSeats.has(seat)) {
@@ -938,19 +892,16 @@ function updateActionQueue() {
             }
         }
     } else {
-        // There was a raise — find the first remaining player after the last raiser
-        // who hasn't responded to that raise (hasn't acted after lastRaiseIndex)
         const lastRaiserSeat = actions[lastRaiseIndex].seat;
         const actedAfterRaise = new Set();
         for (let i = lastRaiseIndex + 1; i < actions.length; i++) {
             actedAfterRaise.add(actions[i].seat);
         }
 
-        // Walk the action order starting from the player after the last raiser
         const raiserIdx = actionOrder.indexOf(lastRaiserSeat);
         for (let i = 1; i < actionOrder.length; i++) {
             const seat = actionOrder[(raiserIdx + i) % actionOrder.length];
-            if (seat === lastRaiserSeat) continue; // Back to raiser = done
+            if (seat === lastRaiserSeat) continue;
             if (foldedSeats.has(seat) || skippedSeats.has(seat)) continue;
             if (!actedAfterRaise.has(seat)) {
                 nextSeat = seat;
@@ -961,28 +912,22 @@ function updateActionQueue() {
 
     if (nextSeat) {
         currentActionSeat = nextSeat;
-        const playerName = $(`.poker-seat[data-seat="${currentActionSeat}"] .player-name`).text();
-        $('#current-action-player').text(`Seat ${currentActionSeat} (${playerName})`);
+        $('#current-action-player').text(seatLabel(currentActionSeat));
+        $('#felt-status').text('Recording…');
 
         $('.poker-seat').removeClass('active-action');
         $(`.poker-seat[data-seat="${currentActionSeat}"]`).addClass('active-action');
 
-        // Show "Check" instead of "Call" when the last-option seat gets to act with no raise
         const lastOptionSeat = getLastOptionSeat(
             buttonPos, activePlayers,
             activeHandState.has_btn_straddle, activeHandState.has_utg_straddle
         );
-        const $callBtn = $('[data-action="call"], [data-action="check"]');
-        if (nextSeat === lastOptionSeat && lastRaiseIndex === -1) {
-            $callBtn.text('Check').attr('data-action', 'check');
-        } else {
-            $callBtn.text('Call').attr('data-action', 'call');
-        }
+        const isCheck = (nextSeat === lastOptionSeat && lastRaiseIndex === -1);
+        updateCenterAction(currentActionSeat, isCheck);
     } else {
-        // All remaining players have acted — auto-complete the hand
         $('.poker-seat').removeClass('active-action');
+        hideAllOverlays();
         currentActionSeat = null;
-        $('[data-action="call"], [data-action="check"]').text('Call').attr('data-action', 'call');
         completeHand();
     }
 }
@@ -999,4 +944,3 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
-

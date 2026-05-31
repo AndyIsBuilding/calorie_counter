@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block title %}Poker History - HealthVibe{% endblock %}
+
+{% block navbar %}
+    {% include 'navbar.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto pb-16">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+        <div class="flex justify-between items-center gap-3 flex-wrap">
+            <h1 class="text-xl font-bold text-gray-900">Poker History</h1>
+            <a href="{{ url_for('poker') }}" class="btn btn-secondary btn-sm">&larr; Back to table</a>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-4">
+        <button class="ph-tab btn btn-primary flex-1" data-tab="sessions">Sessions</button>
+        <button class="ph-tab btn btn-secondary flex-1" data-tab="players">Players</button>
+    </div>
+
+    <!-- Sessions tab -->
+    <div id="tab-sessions" class="ph-panel">
+        {% if sessions %}
+        <div class="space-y-2">
+            {% for s in sessions %}
+            <div class="ph-session bg-white rounded-lg shadow-sm overflow-hidden" data-session-id="{{ s.id }}">
+                <button class="ph-session-head w-full text-left p-4 flex justify-between items-center gap-3">
+                    <div>
+                        <div class="font-semibold text-gray-900">{{ s.date }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">
+                            {{ s.hand_count }} hand{{ '' if s.hand_count == 1 else 's' }}
+                            &middot; {{ s.named_count }} tracked
+                            {% if s.duration %}&middot; {{ s.duration }}{% endif %}
+                        </div>
+                    </div>
+                    <span class="ph-caret text-gray-400 text-lg">&#9656;</span>
+                </button>
+                <div class="ph-session-body hidden border-t border-gray-100 p-4"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+            No completed sessions yet. End a session from the table to see it here.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Players tab -->
+    <div id="tab-players" class="ph-panel hidden">
+        {% if players %}
+        <div class="space-y-2">
+            {% for p in players %}
+            <button class="ph-player w-full text-left bg-white rounded-lg shadow-sm p-4 flex justify-between items-center gap-3"
+                    data-player-id="{{ p.id }}">
+                <div>
+                    <div class="font-semibold text-gray-900">
+                        {{ p.name }}
+                        {% if p.is_hero %}<span class="text-xs font-bold text-white bg-primary rounded-full px-2 py-0.5 ml-1" style="background-color: var(--primary);">YOU</span>{% endif %}
+                    </div>
+                    <div class="text-xs text-gray-500 mt-0.5">
+                        VPIP {{ p.vpip }}% &middot; PFR {{ p.pfr }}% &middot; {{ p.total_hands }} hands
+                        {% if p.notes %}&middot; <span class="text-blue-600">has notes</span>{% endif %}
+                    </div>
+                </div>
+                <span class="text-gray-400 text-lg">&#9656;</span>
+            </button>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+            No tracked players yet. Name players during a session to start building reads.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Player detail / notes modal -->
+<div id="player-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div id="player-detail-content"></div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/poker_history.js') }}?v={{ range(1, 10000) | random }}"></script>
+{% endblock %}
