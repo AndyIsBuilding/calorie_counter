@@ -1553,11 +1553,6 @@ def poker():
                 'actions': actions
             }
 
-        # The user's own "hero" player name, if they've designated one before
-        c.execute("""SELECT player_name FROM poker_players
-                     WHERE user_id = ? AND is_hero = 1 LIMIT 1""", (current_user.id,))
-        hero_row = c.fetchone()
-
         session_data = {
             'session_id': session_id,
             'button_position': button_pos,
@@ -1565,19 +1560,29 @@ def poker():
             'created_at': created_at,
             'players': players,
             'active_hand': active_hand,
-            'hero_name': hero_row[0] if hero_row else ''
         }
+
+    # The user's own "hero" player name, if they've designated one before — used
+    # both for the active-session UI and to pre-fill the setup "your seat" step.
+    c.execute("""SELECT player_name FROM poker_players
+                 WHERE user_id = ? AND is_hero = 1 LIMIT 1""", (current_user.id,))
+    hero_row = c.fetchone()
+    hero_name = hero_row[0] if hero_row else ''
+    if session_data is not None:
+        session_data['hero_name'] = hero_name
 
     conn.close()
 
-    return render_template('poker.html', session=session_data)
+    return render_template('poker.html', session=session_data, hero_name=hero_name)
 
 @app.route('/poker/start_session', methods=['POST'])
 @login_required
 def start_poker_session():
     """Initialize a new poker session"""
     button_position = request.form.get('button_position', type=int)
-    
+    hero_seat = request.form.get('hero_seat', type=int)
+    hero_name = request.form.get('hero_name', '').strip()
+
     if not button_position or button_position < 1 or button_position > 9:
         return jsonify({
             'success': False,
@@ -1613,10 +1618,34 @@ def start_poker_session():
                       session_hands, session_vpip, session_pfr, is_sitting_out, joined_at)
                      VALUES (?, NULL, ?, ?, 0, 0, 0, 0, ?)""",
                   (session_id, seat_num, placeholder_names[seat_num - 1], now))
-    
+
+    # If the user told us which seat is theirs, tag it as the hero now so their
+    # hands are attributed from the very first hand (both counters and raw log).
+    if hero_seat and 1 <= hero_seat <= 9 and hero_name:
+        c.execute("SELECT id FROM poker_players WHERE user_id = ? AND player_name = ?",
+                  (current_user.id, hero_name))
+        existing = c.fetchone()
+        if existing:
+            hero_id = existing[0]
+        else:
+            c.execute("""INSERT INTO poker_players
+                         (user_id, player_name, player_notes, total_hands,
+                          total_vpip, total_pfr, is_hero, created_at)
+                         VALUES (?, ?, '', 0, 0, 0, 1, ?)""",
+                      (current_user.id, hero_name, now))
+            hero_id = c.lastrowid
+        # Exactly one hero per user
+        c.execute("UPDATE poker_players SET is_hero = 0 WHERE user_id = ? AND id != ?",
+                  (current_user.id, hero_id))
+        c.execute("UPDATE poker_players SET is_hero = 1 WHERE id = ?", (hero_id,))
+        c.execute("""UPDATE poker_session_players
+                     SET player_id = ?, player_display_name = ?
+                     WHERE session_id = ? AND seat_number = ?""",
+                  (hero_id, hero_name, session_id, hero_seat))
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({
         'success': True,
         'session_id': session_id,

@@ -6,6 +6,8 @@ let switchFromSeat = null;
 let activeHandState = null;
 let currentActionSeat = null;
 let cachedActivePlayers = []; // Cached for the duration of a hand
+let setupHeroSeat = null;     // chosen during session setup ("which seat are you in?")
+let setupHeroName = '';
 
 // Initialize on page load
 $(document).ready(function() {
@@ -18,7 +20,34 @@ $(document).ready(function() {
 });
 
 function setupStartSessionHandlers() {
+    // Setup is two steps: 1) which seat are you in?  2) which seat has the button?
     $('#start-session-btn, #start-session-btn-main').on('click', function() {
+        showHeroSeatSelector();
+    });
+}
+
+function showHeroSeatSelector() {
+    setupHeroSeat = null;
+    setupHeroName = '';
+    $('#hero-name-input').val(typeof HERO_NAME !== 'undefined' ? (HERO_NAME || '') : '');
+    $('#hero-modal').removeClass('hidden');
+
+    $('.hero-seat-select').off('click').on('click', function() {
+        const name = $('#hero-name-input').val().trim();
+        if (!name) {
+            showToast('Enter your name first (or tap Skip)', 'error');
+            return;
+        }
+        setupHeroSeat = $(this).data('seat');
+        setupHeroName = name;
+        $('#hero-modal').addClass('hidden');
+        showButtonSelector();
+    });
+
+    $('#hero-skip-btn').off('click').on('click', function() {
+        setupHeroSeat = null;
+        setupHeroName = '';
+        $('#hero-modal').addClass('hidden');
         showButtonSelector();
     });
 }
@@ -26,20 +55,23 @@ function setupStartSessionHandlers() {
 function showButtonSelector() {
     $('#button-modal').removeClass('hidden');
 
-    $('.btn-position-select').on('click', function() {
+    $('.btn-position-select').off('click').on('click', function() {
         const position = $(this).data('position');
         startSession(position);
     });
 
-    $('#cancel-button-select').on('click', function() {
+    $('#cancel-button-select').off('click').on('click', function() {
         $('#button-modal').addClass('hidden');
     });
 }
 
 function startSession(buttonPosition) {
-    $.post('/poker/start_session', {
-        button_position: buttonPosition
-    })
+    const data = { button_position: buttonPosition };
+    if (setupHeroSeat) {
+        data.hero_seat = setupHeroSeat;
+        data.hero_name = setupHeroName;
+    }
+    $.post('/poker/start_session', data)
     .done(function(response) {
         if (response.success) {
             setTimeout(() => location.reload(), 800);
