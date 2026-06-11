@@ -9,7 +9,19 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='calorie_tracking.png') }}" sizes="120x120">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon_default_light.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/icon_default_light.png') }}" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/icon_dark.png') }}" media="(prefers-color-scheme: dark)">
+    <script>
+        // iOS snapshots apple-touch-icon from the live DOM at "Add to Home Screen"
+        // time and offers no media-query support for it, so swap in the dark
+        // variant here when the device is in dark mode. Tinted/grayscale mode has
+        // no web-exposed signal; iOS derives that look from the icon on its own.
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.querySelector('link[rel="apple-touch-icon"]').href =
+                "{{ url_for('static', filename='icons/icon_dark.png') }}";
+        }
+    </script>
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <title>{% block title %}HealthVibe{% endblock %}</title>
