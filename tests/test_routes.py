@@ -11,7 +11,7 @@ def test_index_page(client):
     """Test that the index page loads correctly."""
     response = client.get('/')
     assert response.status_code == 200
-    assert b'HealthVibe' in response.data
+    assert b'AppStack' in response.data
 
 def test_login_page(client):
     """Test that the login page loads correctly."""
@@ -72,7 +72,7 @@ def test_login_functionality(client, auth, app):
         logger.debug(f"Follow redirects response status: {response.status_code}")
         logger.debug(f"Follow redirects response data: {response.get_data(as_text=True)}")
         assert response.status_code == 200
-        assert b'Dashboard' in response.data or b'HealthVibe' in response.data
+        assert b'Dashboard' in response.data or b'AppStack' in response.data
     logger.info("Completed login functionality test")
 
 def test_logout(client, auth):

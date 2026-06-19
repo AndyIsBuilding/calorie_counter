@@ -1,5 +1,5 @@
 {
-    "name": "HealthVibe",
+    "name": "AppStack",
     "short_name": "CalorieCounter",
     "start_url": "/",
     "display": "standalone",

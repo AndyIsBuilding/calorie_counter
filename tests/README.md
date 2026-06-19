@@ -1,6 +1,6 @@
-# Testing the HealthVibe Application
+# Testing the AppStack Application
 
-This directory contains tests for the HealthVibe application using pytest.
+This directory contains tests for the AppStack application using pytest.
 
 ## Running Tests
 

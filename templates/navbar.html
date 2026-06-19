@@ -5,7 +5,7 @@
         <!-- Top bar with logo and menu button -->
         <div class="flex items-center justify-between h-16 relative">
             <!-- Logo -->
-            <div class="text-xl font-bold text-primary">HealthVibe</div>
+            <div class="text-xl font-bold text-primary">AppStack</div>
 
             <!-- Nutrition Stats - Hidden on mobile -->
             <div class="navbar-stats hidden md:flex">
@@ -113,7 +113,7 @@
 <nav class="navbar">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center h-16 relative">
-            <div class="text-xl font-bold text-primary">HealthVibe</div>
+            <div class="text-xl font-bold text-primary">AppStack</div>
             <div class="hidden md:flex space-x-0">
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}text-primary border-b-2 border-primary{% endif %}">Dashboard</a>

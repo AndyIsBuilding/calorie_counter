@@ -289,7 +289,7 @@ def test_login_route(app, client):
             
             # Look for elements that would be on the dashboard page
             # This could be a heading, a specific text, or an element ID
-            assert b'Log Food' in response.data or b'Dashboard' in response.data or b'HealthVibe' in response.data
+            assert b'Log Food' in response.data or b'Dashboard' in response.data or b'AppStack' in response.data
             
             # Clean up
             c.execute("DELETE FROM users WHERE username = ?", (test_username,))
@@ -315,6 +315,6 @@ def test_login_route(app, client):
             assert response.status_code == 200
             
             # Look for elements that would be on the dashboard page
-            assert b'Log Food' in response.data or b'Dashboard' in response.data or b'HealthVibe' in response.data
+            assert b'Log Food' in response.data or b'Dashboard' in response.data or b'AppStack' in response.data
         
         # Don't close the shared connection 
